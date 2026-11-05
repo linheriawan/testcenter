@@ -105,7 +105,7 @@ function loading(text = 'Loading…') {
 function viewRegister() {
   app.className = 'app';
   app.innerHTML = `<section class="screen">
-    <div class="brand"><span class="brand-mark">${icon('compass', 20, '#FFFFFF')}</span>Test Center</div>
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">${icon('compass', 20, '#FFFFFF')}</span>Test Center</a>
     <div class="stack-sm">
       <h1 class="h1">Find the path that fits you</h1>
       <p class="lead">Personality and interest tests, reviewed by a licensed psychologist.</p>
@@ -144,7 +144,7 @@ function viewRegister() {
 function viewLogin() {
   app.className = 'app';
   app.innerHTML = `<section class="screen">
-    <div class="brand"><span class="brand-mark">${icon('compass', 20, '#FFFFFF')}</span>Test Center</div>
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">${icon('compass', 20, '#FFFFFF')}</span>Test Center</a>
     <div class="stack-sm">
       <h1 class="h1">Welcome back</h1>
       <p class="lead">Log in to continue your tests and see your results.</p>

@@ -439,6 +439,44 @@ async function listBookings(request, env) {
   return json({ bookings: (results || []).map((b) => ({ ...b, label: SESSION_TYPES[b.session_type] || b.session_type })) });
 }
 
+// ---------------- partnership inquiries (public front page) ----------------
+
+const ORG_TYPES = ['sekolah', 'kampus', 'perusahaan', 'biro', 'lainnya'];
+
+async function ipHash(request, env) {
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip + env.JWT_SECRET));
+  return [...new Uint8Array(digest)].slice(0, 12).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function createInquiry(request, env) {
+  const body = await readJson(request);
+  // Honeypot field: real visitors never fill it in.
+  if (str(body.website)) return json({ ok: true }, 201);
+  const orgType = ORG_TYPES.includes(body.org_type) ? body.org_type : null;
+  const orgName = str(body.org_name, 160);
+  const contactName = str(body.contact_name, 120);
+  const email = str(body.email, 200).toLowerCase();
+  if (!orgType) throw new HttpError(400, 'Silakan pilih jenis organisasi');
+  if (!orgName) throw new HttpError(400, 'Silakan isi nama organisasi');
+  if (!contactName) throw new HttpError(400, 'Silakan isi nama Anda');
+  if (!EMAIL_RE.test(email)) throw new HttpError(400, 'Silakan isi email yang valid');
+  if (body.consent !== true) throw new HttpError(400, 'Silakan centang persetujuan penggunaan data');
+
+  const hash = await ipHash(request, env);
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM inquiries WHERE ip_hash = ? AND created_at > ?').bind(hash, since).first();
+  if (recent && recent.n >= 5) throw new HttpError(429, 'Terlalu banyak pengiriman. Silakan coba lagi nanti.');
+
+  await env.DB.prepare(
+    `INSERT INTO inquiries (id, org_type, org_name, contact_name, position, phone, email, size, message, status, ip_hash, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)`
+  )
+    .bind(randomId(), orgType, orgName, contactName, str(body.position, 120), str(body.phone, 30), email, str(body.size, 40), str(body.message, 2000), hash, now())
+    .run();
+  return json({ ok: true }, 201);
+}
+
 // ---------------- router ----------------
 
 async function handleApi(request, env) {
@@ -462,6 +500,7 @@ async function handleApi(request, env) {
   if (path === '/api/insights' && m === 'POST') return generateInsights(request, env);
   if (path === '/api/bookings' && m === 'GET') return listBookings(request, env);
   if (path === '/api/bookings' && m === 'POST') return createBooking(request, env);
+  if (path === '/api/inquiries' && m === 'POST') return createInquiry(request, env);
 
   const testMatch = path.match(/^\/api\/tests\/([a-z0-9]+)(\/submit)?$/);
   if (testMatch && !testMatch[2] && m === 'GET') return getTest(request, env, testMatch[1]);

@@ -1,20 +1,254 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test Center – Asesmen kepribadian &amp; minat karier bersama psikolog</title>
+  <meta name="description" content="Tes kepribadian dan minat karier yang ditinjau psikolog berlisensi, untuk pelajar, pencari kerja, sekolah, perusahaan, dan mitra asesmen.">
   <meta name="theme-color" content="#3A3FD8">
-  <title>Test Center</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/landing.css">
 </head>
 <body>
-  <main id="app" class="app" aria-live="polite">
-    <div class="loading"><div class="spinner"></div>Loading…</div>
+  <header class="header">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="Test Center, beranda">
+        <span class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span>
+        Test Center
+      </a>
+      <nav class="menu" aria-label="Menu utama">
+        <a href="#untuk-siapa">Untuk siapa</a>
+        <a href="#cara-kerja">Cara kerja</a>
+        <a href="#tentang-kami">Tentang kami</a>
+        <a href="#kontak">Kontak</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-outline btn-sm" href="/app/#/login">Masuk</a>
+        <a class="btn btn-primary btn-sm" href="/app/#/register">Mulai tes</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-text">
+          <span class="eyebrow">Asesmen bersama psikolog berlisensi</span>
+          <h1>Kenali dirimu, temukan <span>arah yang tepat</span></h1>
+          <p class="lead">Tes kepribadian dan minat untuk memilih jurusan dan karier, dirancang dan ditinjau oleh psikolog berlisensi. Untuk pelajar, pencari kerja, sekolah, dan organisasi.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="/app/#/register">Mulai tes gratis</a>
+            <a class="btn btn-outline" href="#kontak">Ajukan kemitraan</a>
+          </div>
+          <div class="hero-note">
+            <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B5E52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Data terenkripsi</span>
+            <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B5E52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Sesuai UU PDP</span>
+            <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B5E52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Hasil langsung keluar</span>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="sample" aria-label="Contoh tampilan hasil tes">
+            <span class="sample-tag">Contoh hasil</span>
+            <div class="sample-type">
+              <small>TIPE KEPRIBADIAN</small>
+              <b>INTJ</b>
+              <span>The Strategic Planner</span>
+            </div>
+            <div class="sample-row">
+              <div class="labels"><b>Introversion 68%</b><span>Extraversion 32%</span></div>
+              <div class="bar"><div style="width:68%"></div></div>
+            </div>
+            <div class="sample-row">
+              <div class="labels"><b>Intuition 61%</b><span>Sensing 39%</span></div>
+              <div class="bar"><div style="width:61%"></div></div>
+            </div>
+            <div class="sample-match"><span>Data Analyst</span><span class="fit">Sangat cocok</span></div>
+            <div class="sample-match"><span>Systems Analyst</span><span class="fit">Sangat cocok</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="untuk-siapa">
+      <div class="wrap">
+        <div class="head">
+          <span class="eyebrow">Untuk siapa</span>
+          <h2 class="h2">Satu platform untuk individu dan organisasi</h2>
+          <p class="lead">Mulai dari memilih jurusan sampai menyaring kandidat, semua hasil didampingi psikolog.</p>
+        </div>
+        <div class="grid-4">
+          <article class="card">
+            <div class="icon-tile" style="background:#E7E8FB"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#272BA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg></div>
+            <h3>Pelajar &amp; mahasiswa</h3>
+            <p>Bingung pilih jurusan? Kenali minat dan kepribadianmu sebelum menentukan langkah.</p>
+            <ul>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Rekomendasi jurusan kuliah</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Konsultasi dengan psikolog</li>
+            </ul>
+            <a class="btn btn-primary btn-sm" href="/app/#/register">Mulai tes</a>
+          </article>
+          <article class="card">
+            <div class="icon-tile" style="background:#DDF3EE"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0B5E52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg></div>
+            <h3>Pencari kerja</h3>
+            <p>Temukan peran yang sesuai dengan kepribadian, keterampilan, dan pengalamanmu.</p>
+            <ul>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Rekomendasi karier dari tes dan CV</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Kekuatan dan area pengembangan</li>
+            </ul>
+            <a class="btn btn-primary btn-sm" href="/app/#/register">Mulai tes</a>
+          </article>
+          <article class="card">
+            <div class="icon-tile" style="background:#FDEBD8"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9A3412" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M10 21v-5h4v5"/></svg></div>
+            <h3>Sekolah &amp; kampus</h3>
+            <p>Dukung bimbingan karier siswa dengan akun kelompok dan dasbor untuk guru BK.</p>
+            <ul>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Siswa bergabung lewat kode undangan</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Persetujuan orang tua untuk siswa di bawah 18 tahun</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Sesi kelompok bersama psikolog</li>
+            </ul>
+            <a class="btn btn-outline btn-sm" href="#kontak" data-type="sekolah">Hubungi kami</a>
+          </article>
+          <article class="card">
+            <div class="icon-tile" style="background:#EEF0F4"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14213D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1"/></svg></div>
+            <h3>Perusahaan</h3>
+            <p>Asesmen kandidat dan karyawan dengan laporan yang ditandatangani psikolog.</p>
+            <ul>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Tautan tes untuk kandidat</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Kumpulan talenta dengan izin kandidat</li>
+            </ul>
+            <a class="btn btn-outline btn-sm" href="#kontak" data-type="perusahaan">Hubungi kami</a>
+          </article>
+        </div>
+        <div class="partner-band">
+          <div>
+            <h3>Biro psikologi atau pusat asesmen?</h3>
+            <p>Gunakan platform kami untuk klien Anda sendiri, dengan merek Anda atau dengan skema bagi hasil.</p>
+          </div>
+          <a class="btn" href="#kontak" data-type="biro">Jadi mitra</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section tint" id="cara-kerja">
+      <div class="wrap">
+        <div class="head">
+          <span class="eyebrow">Cara kerja</span>
+          <h2 class="h2">Tiga langkah menuju arah yang jelas</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><span class="step-num">1</span><h3>Daftar &amp; isi profil</h3><p>Isi data pendidikan, pengalaman, dan keterampilanmu. Datamu dienkripsi.</p></div>
+          <div class="step"><span class="step-num">2</span><h3>Kerjakan tes</h3><p>Tes kepribadian Big Five dan 16 tipe, sekitar 10 menit per tes. Tes minat karier segera hadir.</p></div>
+          <div class="step"><span class="step-num">3</span><h3>Dapatkan hasil &amp; konsultasi</h3><p>Lihat hasil dan rekomendasi jurusan atau karier, lalu diskusikan dengan psikolog.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="tentang-kami">
+      <div class="wrap about">
+        <div class="about-text">
+          <span class="eyebrow">Tentang kami</span>
+          <h2 class="h2">Didirikan oleh psikolog, dibangun untuk Indonesia</h2>
+          <p>Test Center lahir dari pengalaman praktik psikologi: banyak pelajar dan pencari kerja mengambil keputusan besar tanpa mengenal diri mereka dengan baik, dan banyak sekolah serta perusahaan belum punya akses mudah ke asesmen yang terpercaya.</p>
+          <p>Kami menggabungkan alat ukur yang berbasis penelitian dengan teknologi, sehingga asesmen lebih mudah dijangkau. Hasilnya tetap didampingi psikolog berlisensi agar bisa dipahami dan digunakan dengan tepat.</p>
+        </div>
+        <div class="about-side">
+          <div class="person">
+            <span class="avatar" aria-hidden="true">PS</span>
+            <div><b>[Nama Psikolog], M.Psi., Psikolog</b><span>Pendiri · SIPP [nomor izin praktik]</span></div>
+          </div>
+          <div class="value">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6L4 19a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 19l-6-10V3"/></svg>
+            <div><b>Berbasis ilmiah</b><span>Menggunakan alat ukur terbuka seperti IPIP Big Five, ditinjau oleh psikolog.</span></div>
+          </div>
+          <div class="value">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+            <div><b>Data terlindungi</b><span>Data pribadi dienkripsi, dan hanya dibagikan dengan persetujuanmu sesuai UU PDP.</span></div>
+          </div>
+          <div class="value">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-6.2A8 8 0 1 1 21 12z"/></svg>
+            <div><b>Didampingi psikolog</b><span>Hasil tes adalah panduan, bukan diagnosis. Psikolog membantu menafsirkannya.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section tint" id="kontak">
+      <div class="wrap">
+        <div class="head">
+          <span class="eyebrow">Kontak &amp; kemitraan</span>
+          <h2 class="h2">Mari bekerja sama</h2>
+          <p class="lead">Untuk sekolah, kampus, perusahaan, dan biro psikologi. Ceritakan kebutuhan Anda, kami akan menghubungi dalam 2 hari kerja.</p>
+        </div>
+        <div class="contact">
+          <div class="contact-info">
+            <div class="item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span>[email@testcenter.id]</span></div>
+            <div class="item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-6.2A8 8 0 1 1 21 12z"/></svg><span>WhatsApp [08xx xxxx xxxx]</span></div>
+            <div class="item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg><span>[Kota], Indonesia</span></div>
+          </div>
+          <form class="form" id="inquiry" novalidate>
+            <div class="field full">
+              <label for="org_type">Jenis organisasi</label>
+              <select class="input" id="org_type" name="org_type" required>
+                <option value="">Pilih…</option>
+                <option value="sekolah">Sekolah (SMA/SMK/MA)</option>
+                <option value="kampus">Perguruan tinggi</option>
+                <option value="perusahaan">Perusahaan</option>
+                <option value="biro">Biro psikologi / pusat asesmen</option>
+                <option value="lainnya">Lainnya</option>
+              </select>
+            </div>
+            <div class="field full"><label for="org_name">Nama organisasi</label><input class="input" id="org_name" name="org_name" required maxlength="160"></div>
+            <div class="field"><label for="contact_name">Nama Anda</label><input class="input" id="contact_name" name="contact_name" autocomplete="name" required maxlength="120"></div>
+            <div class="field"><label for="position">Jabatan</label><input class="input" id="position" name="position" placeholder="mis. Guru BK, HR Manager" maxlength="120"></div>
+            <div class="field"><label for="phone">WhatsApp</label><input class="input" id="phone" name="phone" type="tel" autocomplete="tel" placeholder="08xx xxxx xxxx" maxlength="30"></div>
+            <div class="field"><label for="email">Email</label><input class="input" id="email" name="email" type="email" autocomplete="email" required maxlength="200"></div>
+            <div class="field full">
+              <label for="size">Perkiraan jumlah peserta</label>
+              <select class="input" id="size" name="size">
+                <option value="">Pilih…</option>
+                <option>Kurang dari 50</option>
+                <option>50–200</option>
+                <option>200–1.000</option>
+                <option>Lebih dari 1.000</option>
+              </select>
+            </div>
+            <div class="field full"><label for="message">Kebutuhan Anda</label><textarea class="input" id="message" name="message" maxlength="2000" placeholder="mis. asesmen minat jurusan untuk kelas 12, rekrutmen staf, kerja sama untuk klien biro"></textarea></div>
+            <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+            <div class="check full"><input id="consent" name="consent" type="checkbox"><label for="consent">Saya setuju data di formulir ini digunakan untuk menghubungi saya terkait kerja sama.</label></div>
+            <div id="msg" class="full" role="status"></div>
+            <div class="full"><button class="btn btn-primary" type="submit">Kirim</button></div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="head"><span class="eyebrow">Pertanyaan umum</span><h2 class="h2">FAQ</h2></div>
+        <div class="faq">
+          <details><summary>Apakah tesnya gratis?</summary><p>Tes dasar dapat dicoba gratis. Laporan lengkap dan konsultasi dengan psikolog akan tersedia sebagai layanan berbayar.</p></details>
+          <details><summary>Apakah hasil tes ini sebuah diagnosis?</summary><p>Tidak. Hasil tes menggambarkan preferensi dan kecenderungan, bukan kemampuan atau diagnosis psikologis. Gunakan sebagai panduan, dan diskusikan dengan psikolog bila perlu.</p></details>
+          <details><summary>Bagaimana data saya dijaga?</summary><p>Data pribadi dan CV disimpan terenkripsi. Data tidak dibagikan ke sekolah, perusahaan, atau pihak lain tanpa persetujuan Anda, dan Anda bisa menghapus akun beserta seluruh datanya kapan saja.</p></details>
+          <details><summary>Apakah sekolah bisa melihat hasil siswanya?</summary><p>Ya, hanya untuk siswa yang bergabung dengan grup sekolah dan memberikan persetujuan. Untuk siswa di bawah 18 tahun, diperlukan persetujuan orang tua atau wali.</p></details>
+        </div>
+      </div>
+    </section>
   </main>
-  <script type="module" src="/app.js"></script>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>© 2026 Test Center</span>
+      <div class="links">
+        <a href="#tentang-kami">Tentang kami</a>
+        <a href="#kontak">Kontak</a>
+        <a href="/app/#/login">Masuk</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/landing.js"></script>
 </body>
 </html>

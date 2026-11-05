@@ -4,6 +4,18 @@ Personality and career assessment app for students and jobseekers, with results 
 
 Runs as a single Cloudflare Worker: static frontend (`public/`) plus the API (`src/`), with D1 for data and Workers AI for career/major matching.
 
+- `/` — public front page in Bahasa Indonesia (`public/index.html`), with the partnership inquiry form
+- `/app/` — the assessment app (`public/app/index.html`, `public/app.js`)
+
+## Reading partnership inquiries
+
+Until there is an admin dashboard, open D1 → `testcenter-db` → Console in the Cloudflare dashboard and run:
+
+```sql
+SELECT created_at, org_type, org_name, contact_name, position, phone, email, size, message
+FROM inquiries ORDER BY created_at DESC;
+```
+
 ## What's in v0.1
 
 - Register / log in (PBKDF2-hashed passwords, HttpOnly JWT session cookie)
@@ -63,6 +75,7 @@ npm run dev
 | GET | `/api/results` | latest result per test plus AI matches |
 | POST | `/api/insights` | generate AI matches |
 | GET / POST | `/api/bookings` | consultation requests |
+| POST | `/api/inquiries` | partnership inquiry from the front page (no login) |
 
 ## Next steps
 
