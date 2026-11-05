@@ -512,6 +512,12 @@ async function handleApi(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (env.CANONICAL_HOST && env.LEGACY_HOST && url.hostname === env.LEGACY_HOST) {
+      url.hostname = env.CANONICAL_HOST;
+      url.protocol = 'https:';
+      url.port = '';
+      return Response.redirect(url.toString(), 301);
+    }
     if (url.pathname.startsWith('/api/')) {
       // Block cross-site form posts: state-changing API calls must come from this origin.
       if (request.method !== 'GET') {
