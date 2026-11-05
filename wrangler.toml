@@ -1,0 +1,23 @@
+name = "testcenter"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "testcenter-db"
+database_id = "1f1b7f8c-2a44-4f92-bd33-2ee3513ea727"
+
+[ai]
+binding = "AI"
+
+[vars]
+AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+
+[observability]
+enabled = true
