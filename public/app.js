@@ -42,7 +42,7 @@ function goNext() {
   } catch {
     next = null;
   }
-  if (next && next.startsWith('/org/')) {
+  if (next && /^\/(org|admin|psikolog)\//.test(next)) {
     location.href = next;
     return true;
   }
@@ -191,6 +191,8 @@ function viewLogin() {
       const m = await api('/api/me');
       state.hasProfile = m.hasProfile;
       state.hasOrg = !!m.hasOrg;
+      state.isAdmin = !!m.isAdmin;
+      state.isPsychologist = !!m.isPsychologist;
       if (goNext()) return;
       go(state.hasProfile ? '#/home' : '#/profile');
     } catch (err) {
@@ -414,7 +416,7 @@ const TEST_COLORS = {
 
 async function viewHome() {
   loading();
-  const { tests, assignments } = await api('/api/tests');
+  const [{ tests, assignments }, { invitations }] = await Promise.all([api('/api/tests'), api('/api/invitations')]);
   const core = tests.filter((t) => t.status !== 'soon' && t.id !== 'kraepelin');
   const done = core.filter((t) => t.status === 'done').length;
   const first = (state.user?.name || '').split(' ')[0];
@@ -429,6 +431,16 @@ async function viewHome() {
         ? ''
         : `<a class="card" href="#/profile" style="text-decoration:none;color:inherit"><b>Complete your profile</b><span class="small">Add your education and CV details so your matches fit you.</span></a>`
     }
+    ${(invitations || [])
+      .map(
+        (inv) => `<div class="card" style="border-color:#9EA2F5;background:var(--accent-soft)">
+        <span class="eyebrow" style="color:var(--accent)">New invitation</span>
+        <b style="font-size:16px">${esc(inv.org)} invited you to "${esc(inv.name)}"</b>
+        <span class="small">Tests: ${inv.tests.map(esc).join(', ')}</span>
+        <div class="row"><a class="btn btn-primary btn-sm" href="#/join/${esc(inv.code)}">Review and accept</a><button type="button" class="btn btn-outline btn-sm" data-decline="${inv.id}">Decline</button></div>
+      </div>`
+      )
+      .join('')}
     ${(assignments || [])
       .map((a) => {
         const left = a.tests.filter((t) => !t.done);
@@ -481,6 +493,13 @@ async function viewHome() {
         .join('')}
     </div>
   </section>${nav('#/home')}`;
+  app.querySelectorAll('[data-decline]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (!confirm('Decline this invitation? The organization will see that you declined.')) return;
+      await api(`/api/invitations/${b.dataset.decline}/decline`, { method: 'POST' });
+      render();
+    })
+  );
 }
 
 // ---------------- taking a test ----------------
@@ -709,93 +728,170 @@ async function viewResults() {
 
 // ---------------- consultation ----------------
 
-function nextWeekdays(n) {
-  const out = [];
-  const d = new Date();
-  while (out.length < n) {
-    d.setDate(d.getDate() + 1);
-    const day = d.getDay();
-    if (day !== 0 && day !== 6) {
-      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      out.push({ iso, dow: d.toLocaleDateString('en-US', { weekday: 'short' }), num: d.getDate() });
-    }
-  }
-  return out;
+const SESSION_INFO = {
+  review: ['Result review', '30 min · walk through your test results'],
+  coaching: ['Career coaching', '60 min · plan your next steps together']
+};
+const STATUS_EN = { requested: 'Waiting for confirmation', confirmed: 'Confirmed', done: 'Completed', cancelled: 'Cancelled', declined: 'Declined', no_show: 'Missed' };
+
+function fmtStamp(stamp) {
+  const d = new Date(`${stamp.slice(0, 10)}T00:00:00Z`);
+  return `${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })} · ${stamp.slice(11, 16)} WIB`;
+}
+
+function bookingCard(b, now) {
+  const upcoming = ['requested', 'confirmed'].includes(b.status) && b.start_at > now;
+  const color = { requested: 'var(--warm)', confirmed: 'var(--accent)', done: 'var(--ok)' }[b.status] || 'var(--muted)';
+  return `<div class="card" style="gap:8px">
+    <div class="row between"><b style="font-size:15px">${esc(b.title || b.session_type)}</b><span class="small" style="font-weight:700;color:${color}">${esc(STATUS_EN[b.status] || b.status)}</span></div>
+    <span class="small">${fmtStamp(b.start_at)} · ${b.duration_min} min${b.psychologist ? ' · ' + esc(b.psychologist) : ''}${b.org_name ? ' · ' + esc(b.org_name) : ''}</span>
+    ${b.status === 'confirmed' && b.meeting_link ? (/^https?:\/\//.test(b.meeting_link) ? `<a class="btn btn-primary btn-sm" href="${esc(b.meeting_link)}" target="_blank" rel="noopener" style="align-self:flex-start">Join session</a>` : `<span class="small">Location: <b>${esc(b.meeting_link)}</b></span>`) : ''}
+    ${b.status === 'requested' ? '<span class="small">The psychologist will confirm this time and add a meeting link.</span>' : ''}
+    ${upcoming && b.kind === 'consult' ? `<button type="button" class="link-btn danger" data-cancel="${b.id}" style="align-self:flex-start;font-size:13px">Cancel</button>` : ''}
+  </div>`;
 }
 
 async function viewConsult() {
   loading();
-  let { bookings } = await api('/api/bookings');
-  const days = nextWeekdays(5);
-  const times = ['09:00', '10:30', '13:00', '14:30', '16:00', '19:00'];
-  const sessions = [
-    ['review', 'Result review', '30 min · walk through your results'],
-    ['coaching', 'Career coaching', '60 min · plan your next steps']
-  ];
-  const sel = { session: 'review', day: days[0].iso, time: '10:30', note: '' };
+  const [{ psychologists }, mine] = await Promise.all([api('/api/psychologists'), api('/api/bookings')]);
+  const sel = { psych: psychologists[0]?.id || null, session: 'review', date: null, time: null, note: '' };
+  let days = [];
   let notice = '';
   let error = '';
+  let loadingSlots = false;
+  let bookings = mine.bookings;
+  const now = mine.now;
+
+  const loadSlots = async () => {
+    if (!sel.psych) return;
+    loadingSlots = true;
+    draw();
+    try {
+      days = (await api(`/api/slots?psychologist=${sel.psych}&days=14`)).days;
+    } catch (err) {
+      error = err.message;
+      days = [];
+    }
+    loadingSlots = false;
+    const first = days.find((d) => d.slots.length);
+    if (!sel.date || !days.some((d) => d.date === sel.date && d.slots.length)) sel.date = first ? first.date : null;
+    sel.time = null;
+    draw();
+  };
 
   const draw = () => {
+    const upcoming = bookings
+      .filter((b) => ['requested', 'confirmed'].includes(b.status) && b.start_at > now)
+      .sort((a, b) => a.start_at.localeCompare(b.start_at));
+    const past = bookings.filter((b) => !upcoming.includes(b));
+    const p = psychologists.find((x) => x.id === sel.psych);
+    const day = days.find((d) => d.date === sel.date);
     app.className = 'app';
-    app.innerHTML = `<section class="screen narrow-m with-nav">
+    app.innerHTML = `<section class="screen with-nav narrow-m">
       <h1 class="h1" style="font-size:22px">Talk to a psychologist</h1>
-      <div class="card" style="flex-direction:row;align-items:center;gap:14px;padding:14px">
-        <div style="width:56px;height:56px;border-radius:28px;background:#E7E8FB;color:#272BA8;font-weight:800;display:flex;align-items:center;justify-content:center">PS</div>
-        <div class="stack-sm" style="gap:3px"><b style="font-size:15px">Licensed psychologist</b><span class="small">Career &amp; education · online video call</span></div>
-      </div>
+      ${upcoming.length ? `<div class="stack-sm"><h2 class="h2" style="font-size:15px">Your upcoming sessions</h2>${upcoming.map((b) => bookingCard(b, now)).join('')}</div>` : ''}
       ${notice ? `<div class="notice" role="status">${esc(notice)}</div>` : ''}
-      <div class="stack-sm" style="gap:10px"><h2 class="h2" style="font-size:15px">Session type</h2>
-        ${sessions
+      ${
+        !psychologists.length
+          ? '<div class="card"><b>No psychologist is available yet</b><span class="small">Please check back soon.</span></div>'
+          : `
+      <div class="stack-sm" style="gap:10px"><h2 class="h2" style="font-size:15px">Psychologist</h2>
+        ${psychologists
           .map(
-            ([id, name, meta]) => `<button type="button" class="select-btn session-btn" data-session="${id}" aria-pressed="${sel.session === id}">
+            (x) => `<button type="button" class="select-btn session-btn" data-psych="${x.id}" aria-pressed="${sel.psych === x.id}">
+            <span style="width:44px;height:44px;border-radius:22px;background:#E7E8FB;color:#272BA8;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${esc(x.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</span>
+            <span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px">${esc(x.name)}</span><span class="small" style="font-weight:500">${esc(x.title || 'Licensed psychologist')}${x.sipp ? ' · SIPP ' + esc(x.sipp) : ''}</span></span>
+          </button>`
+          )
+          .join('')}
+        ${p && p.bio ? `<p class="small">${esc(p.bio)}</p>` : ''}
+      </div>
+      <div class="stack-sm" style="gap:10px"><h2 class="h2" style="font-size:15px">Session type</h2>
+        ${Object.entries(SESSION_INFO)
+          .map(
+            ([id, [name, meta]]) => `<button type="button" class="select-btn session-btn" data-session="${id}" aria-pressed="${sel.session === id}">
             <span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px">${name}</span><span class="small" style="font-weight:500">${meta}</span></span>
           </button>`
           )
           .join('')}
       </div>
       <div class="stack-sm" style="gap:10px"><h2 class="h2" style="font-size:15px">Date</h2>
-        <div class="grid-5">${days
-          .map((d) => `<button type="button" class="select-btn day-btn" data-day="${d.iso}" aria-pressed="${sel.day === d.iso}"><small>${d.dow}</small><b>${d.num}</b></button>`)
-          .join('')}</div>
+        ${
+          loadingSlots
+            ? '<div class="loading" style="padding:12px 0"><div class="spinner"></div>Checking the calendar…</div>'
+            : days.some((d) => d.slots.length)
+              ? `<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">${days
+                  .filter((d) => d.slots.length)
+                  .map((d) => {
+                    const dt = new Date(`${d.date}T00:00:00Z`);
+                    return `<button type="button" class="select-btn day-btn" data-day="${d.date}" aria-pressed="${sel.date === d.date}" style="min-width:64px"><small>${dt.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</small><b>${dt.getUTCDate()}</b><small>${dt.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}</small></button>`;
+                  })
+                  .join('')}</div>`
+              : '<p class="small">No free times in the next two weeks. Please check again later.</p>'
+        }
       </div>
-      <div class="stack-sm" style="gap:10px"><h2 class="h2" style="font-size:15px">Time (WIB)</h2>
-        <div class="grid-3">${times.map((t) => `<button type="button" class="select-btn" data-time="${t}" aria-pressed="${sel.time === t}">${t}</button>`).join('')}</div>
-      </div>
-      <div class="field"><label for="note">Anything you want to discuss? <span class="small">(optional)</span></label><textarea class="input" id="note" maxlength="500">${esc(sel.note)}</textarea></div>
-      ${error ? `<div class="error" role="alert">${esc(error)}</div>` : ''}
-      <button type="button" class="btn btn-primary" id="book">Request booking</button>
-      <p class="small center">The psychologist will confirm your slot and payment details by WhatsApp or email.</p>
       ${
-        bookings.length
-          ? `<div class="card"><h2 class="h2" style="font-size:15px">Your bookings</h2>${bookings
-              .map((b) => `<div class="row between" style="font-size:14px;border-top:1px solid #EEF0F4;padding-top:10px"><span>${esc(b.label)}<br><span class="small">${esc(b.date)} · ${esc(b.time)} WIB</span></span><span class="badge badge-soon" style="text-transform:capitalize">${esc(b.status)}</span></div>`)
-              .join('')}</div>`
+        day && day.slots.length
+          ? `<div class="stack-sm" style="gap:10px"><h2 class="h2" style="font-size:15px">Time (WIB)</h2>
+        <div class="grid-3">${day.slots.map((t) => `<button type="button" class="select-btn" data-time="${t}" aria-pressed="${sel.time === t}">${t}</button>`).join('')}</div></div>`
           : ''
       }
+      <div class="field"><label for="note">Anything you want to discuss? <span class="small">(optional)</span></label><textarea class="input" id="note" maxlength="500">${esc(sel.note)}</textarea></div>
+      ${error ? `<div class="error" role="alert">${esc(error)}</div>` : ''}
+      <button type="button" class="btn btn-primary" id="book" ${sel.time ? '' : 'disabled'}>Request this time</button>
+      <p class="small center">The psychologist confirms your request and adds a video call link. Payment details will be shared when confirmed.</p>`
+      }
+      ${past.length ? `<div class="stack-sm"><h2 class="h2" style="font-size:15px">Past and cancelled</h2>${past.slice(0, 10).map((b) => bookingCard(b, now)).join('')}</div>` : ''}
     </section>${nav('#/consult')}`;
 
     const note = document.getElementById('note');
-    note.addEventListener('input', () => (sel.note = note.value));
+    if (note) note.addEventListener('input', () => (sel.note = note.value));
+    app.querySelectorAll('[data-psych]').forEach((b) =>
+      b.addEventListener('click', () => {
+        sel.psych = b.dataset.psych;
+        loadSlots();
+      })
+    );
     app.querySelectorAll('[data-session]').forEach((b) => b.addEventListener('click', () => { sel.session = b.dataset.session; draw(); }));
-    app.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => { sel.day = b.dataset.day; draw(); }));
+    app.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => { sel.date = b.dataset.day; sel.time = null; draw(); }));
     app.querySelectorAll('[data-time]').forEach((b) => b.addEventListener('click', () => { sel.time = b.dataset.time; draw(); }));
-    document.getElementById('book').addEventListener('click', async (e) => {
-      e.currentTarget.disabled = true;
-      error = '';
-      notice = '';
-      try {
-        await api('/api/bookings', { method: 'POST', body: { session_type: sel.session, date: sel.day, time: sel.time, note: sel.note } });
-        bookings = (await api('/api/bookings')).bookings;
-        notice = 'Booking requested. We will confirm it with you soon.';
-        sel.note = '';
-      } catch (err) {
-        error = err.message;
-      }
-      draw();
-    });
+    app.querySelectorAll('[data-cancel]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        if (!confirm('Cancel this session?')) return;
+        try {
+          await api(`/api/bookings/${b.dataset.cancel}/cancel`, { method: 'POST' });
+          bookings = (await api('/api/bookings')).bookings;
+          notice = 'Session cancelled.';
+          await loadSlots();
+        } catch (err) {
+          error = err.message;
+          draw();
+        }
+      })
+    );
+    const book = document.getElementById('book');
+    if (book)
+      book.addEventListener('click', async () => {
+        book.disabled = true;
+        error = '';
+        notice = '';
+        try {
+          await api('/api/bookings', {
+            method: 'POST',
+            body: { psychologist_id: sel.psych, session_type: sel.session, start_at: `${sel.date}T${sel.time}`, note: sel.note }
+          });
+          bookings = (await api('/api/bookings')).bookings;
+          notice = 'Request sent. You will see it here once the psychologist confirms.';
+          sel.note = '';
+          await loadSlots();
+        } catch (err) {
+          error = err.message;
+          await loadSlots();
+        }
+      });
   };
   draw();
+  await loadSlots();
 }
 
 // ---------------- account ----------------
@@ -807,7 +903,9 @@ function viewAccount() {
     <div class="card"><b style="font-size:16px">${esc(state.user.name)}</b><span class="small">${esc(state.user.email)}</span></div>
     <div class="card" style="gap:0;padding:6px 18px">
       <a href="#/profile" style="padding:14px 0;text-decoration:none;font-weight:700">Edit profile &amp; CV</a>
-      ${state.hasOrg ? '<a href="/org/" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Organization portal</a>' : ''}
+      ${state.isPsychologist ? '<a href="/psikolog/" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Psychologist workspace</a>' : ''}
+      ${state.hasOrg || state.isAdmin ? '<a href="/org/" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Organization portal</a>' : ''}
+      ${state.isAdmin ? '<a href="/admin/" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Platform admin</a>' : ''}
       <button type="button" class="link-btn" id="logout" style="padding:14px 0;text-align:left;border-top:1px solid #EEF0F4">Log out</button>
       <button type="button" class="link-btn danger" id="del" style="padding:14px 0;text-align:left;border-top:1px solid #EEF0F4">Delete my account and data</button>
     </div>
@@ -1149,6 +1247,8 @@ async function start() {
     state.user = m.user;
     state.hasProfile = !!m.hasProfile;
     state.hasOrg = !!m.hasOrg;
+    state.isAdmin = !!m.isAdmin;
+    state.isPsychologist = !!m.isPsychologist;
   } catch (err) {
     app.innerHTML = `<section class="screen"><div class="error" role="alert">${esc(err.message)}</div></section>`;
     return;

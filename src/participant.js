@@ -105,6 +105,9 @@ async function joinOrg(request, env, user) {
   )
     .bind(randomId(), inv.org_id, inv.id, user.id, str(body.nik, 40), str(body.position, 160), str(body.division, 120), ts, ts)
     .run();
+  await env.DB.prepare("UPDATE org_invite_emails SET status = 'accepted', responded_at = ? WHERE invite_id = ? AND email = ?")
+    .bind(ts, inv.id, String(user.email).toLowerCase())
+    .run();
   return json({ ok: true, org: inv.org_name }, 201);
 }
 

@@ -3,6 +3,11 @@ import { HttpError, json, readJson, str, now } from './http.js';
 import { handleOrg, userHasOrg } from './org.js';
 import { latestResults } from './results.js';
 import { handleParticipant, myAssignments } from './participant.js';
+import { handleSchedule } from './schedule.js';
+import { handlePsych } from './psych.js';
+import { handleAdmin } from './admin.js';
+import { isPlatformAdmin } from './org.js';
+import { deleteUserData } from './userdata.js';
 import { TESTS, COMING_SOON, publicTest, validateAnswers } from './tests.js';
 import {
   hashPassword,
@@ -119,18 +124,18 @@ async function me(request, env) {
   const user = await currentUser(request, env);
   if (!user) return json({ user: null });
   const profile = await env.DB.prepare('SELECT segment FROM profiles WHERE user_id = ?').bind(user.id).first();
-  return json({ user, hasProfile: !!(profile && profile.segment), hasOrg: await userHasOrg(env, user) });
+  return json({
+    user,
+    hasProfile: !!(profile && profile.segment),
+    hasOrg: await userHasOrg(env, user),
+    isAdmin: isPlatformAdmin(env, user),
+    isPsychologist: user.role === 'psychologist'
+  });
 }
 
 async function deleteAccount(request, env) {
   const user = await requireUser(request, env);
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM bookings WHERE user_id = ?').bind(user.id),
-    env.DB.prepare('DELETE FROM insights WHERE user_id = ?').bind(user.id),
-    env.DB.prepare('DELETE FROM test_results WHERE user_id = ?').bind(user.id),
-    env.DB.prepare('DELETE FROM profiles WHERE user_id = ?').bind(user.id),
-    env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id)
-  ]);
+  await deleteUserData(env, user.id);
   return json({ ok: true }, 200, { 'set-cookie': sessionCookie('', 0) });
 }
 
@@ -378,37 +383,6 @@ async function generateInsights(request, env) {
   return json({ insights: { ...content, createdAt: ts } });
 }
 
-// ---------------- bookings ----------------
-
-const SESSION_TYPES = { review: 'Result review (30 min)', coaching: 'Career coaching (60 min)' };
-
-async function createBooking(request, env) {
-  const user = await requireUser(request, env);
-  const body = await readJson(request);
-  const type = SESSION_TYPES[body.session_type] ? body.session_type : null;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(body.date || '') ? body.date : null;
-  const time = /^\d{2}:\d{2}$/.test(body.time || '') ? body.time : null;
-  if (!type || !date || !time) throw new HttpError(400, 'Please choose a session type, date and time');
-  if (date < new Date().toISOString().slice(0, 10)) throw new HttpError(400, 'Please choose a future date');
-  const id = randomId();
-  await env.DB.prepare(
-    'INSERT INTO bookings (id, user_id, session_type, date, time, note, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  )
-    .bind(id, user.id, type, date, time, str(body.note, 500), 'requested', now())
-    .run();
-  return json({ booking: { id, session_type: type, label: SESSION_TYPES[type], date, time, status: 'requested' } }, 201);
-}
-
-async function listBookings(request, env) {
-  const user = await requireUser(request, env);
-  const { results } = await env.DB.prepare(
-    'SELECT id, session_type, date, time, status, created_at FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT 20'
-  )
-    .bind(user.id)
-    .all();
-  return json({ bookings: (results || []).map((b) => ({ ...b, label: SESSION_TYPES[b.session_type] || b.session_type })) });
-}
-
 // ---------------- partnership inquiries (public front page) ----------------
 
 const ORG_TYPES = ['sekolah', 'kampus', 'perusahaan', 'biro', 'lainnya'];
@@ -462,8 +436,18 @@ async function handleApi(request, env) {
     const res = await handleParticipant(request, env, path, m, () => requireUser(request, env));
     if (res) return res;
   }
+  {
+    const res = await handleSchedule(request, env, path, m, () => requireUser(request, env));
+    if (res) return res;
+  }
+  if (path.startsWith('/api/psych/')) {
+    const res = await handlePsych(request, env, path, m, await requireUser(request, env));
+    if (res) return res;
+    throw new HttpError(404, 'Not found');
+  }
   if (path.startsWith('/api/org/') || path.startsWith('/api/admin/')) {
-    const res = await handleOrg(request, env, path, m, await requireUser(request, env));
+    const user = await requireUser(request, env);
+    const res = (await handleAdmin(request, env, path, m, user)) || (await handleOrg(request, env, path, m, user));
     if (res) return res;
     throw new HttpError(404, 'Not found');
   }
@@ -477,8 +461,6 @@ async function handleApi(request, env) {
   if (path === '/api/tests' && m === 'GET') return listTests(request, env);
   if (path === '/api/results' && m === 'GET') return getResults(request, env);
   if (path === '/api/insights' && m === 'POST') return generateInsights(request, env);
-  if (path === '/api/bookings' && m === 'GET') return listBookings(request, env);
-  if (path === '/api/bookings' && m === 'POST') return createBooking(request, env);
   if (path === '/api/inquiries' && m === 'POST') return createInquiry(request, env);
 
   const testMatch = path.match(/^\/api\/tests\/([a-z0-9]+)(\/submit)?$/);

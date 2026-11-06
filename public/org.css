@@ -210,3 +210,43 @@ tbody tr:hover { background: #FAFBFD; }
   .paper h3 { break-after: avoid; }
   .paper table, .paper .two, .paper .sign { break-inside: avoid; }
 }
+
+/* ---------- psychologist calendar ---------- */
+.cal-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: #FFFFFF; }
+.cal { display: grid; grid-template-columns: 56px repeat(7, minmax(110px, 1fr)); min-width: 820px; }
+.cal-head { position: sticky; top: 0; background: #F8F9FC; border-bottom: 1px solid var(--line); padding: 8px; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--muted); z-index: 2; }
+.cal-head.today { color: var(--accent); }
+.cal-head b { display: block; font-size: 18px; color: var(--ink); }
+.cal-head.today b { color: var(--accent); }
+.cal-times { position: relative; border-right: 1px solid var(--line); }
+.cal-times span { position: absolute; right: 6px; font-size: 11px; color: var(--muted); transform: translateY(-50%); }
+.cal-day { position: relative; border-right: 1px solid #EEF0F4; cursor: copy; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 47px, #EEF0F4 47px, #EEF0F4 48px); }
+.cal-day:last-child { border-right: 0; }
+.cal-day .avail { position: absolute; left: 0; right: 0; background: rgba(58, 63, 216, 0.05); pointer-events: none; }
+.cal-day.blocked { background-color: #F4F4F6; }
+.cal-ev { position: absolute; left: 4px; right: 4px; border-radius: 8px; padding: 4px 6px; font-size: 11.5px; line-height: 1.25; overflow: hidden; text-decoration: none; border-left: 3px solid; cursor: pointer; }
+.cal-ev b { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ev.requested { background: #FFF3E6; color: #7C2D12; border-color: #C2410C; border-style: dashed solid dashed solid; }
+.cal-ev.confirmed { background: #E3E5FB; color: #1E2290; border-color: #3A3FD8; }
+.cal-ev.assessment.confirmed { background: #DDF3EE; color: #0B5E52; border-color: #0F7B6C; }
+.cal-ev.done, .cal-ev.no_show { background: #EEF0F4; color: var(--muted); border-color: #AEB4C2; }
+.cal-ev.cancelled, .cal-ev.declined { background: #FFFFFF; color: #8A91A3; border-color: #D0D5DE; text-decoration: line-through; }
+.cal-now { position: absolute; left: 0; right: 0; height: 2px; background: #B42318; z-index: 1; pointer-events: none; }
+.agenda { display: none; }
+.agenda-day { font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 8px 0 4px; }
+.agenda a { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #FFFFFF; text-decoration: none; color: inherit; margin-bottom: 8px; }
+.agenda a .t { font-weight: 800; min-width: 48px; }
+.st-requested { background: var(--rec-c-bg); color: var(--rec-c); }
+.st-confirmed { background: var(--rec-p-bg); color: var(--rec-p); }
+.st-done { background: var(--rec-d-bg); color: var(--rec-d); }
+.st-cancelled, .st-declined, .st-no_show { background: #EEF0F4; color: var(--muted); }
+.people-pick { display: flex; flex-direction: column; gap: 6px; }
+.people-pick button { text-align: left; border: 1px solid var(--line); background: #FFFFFF; border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+.people-pick button:hover { border-color: var(--accent); }
+.daypick { display: flex; flex-wrap: wrap; gap: 8px; }
+.daypick label { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--line-strong); border-radius: 10px; padding: 8px 12px; cursor: pointer; font-weight: 600; }
+@media (max-width: 760px) {
+  .cal-wrap { display: none; }
+  .agenda { display: block; }
+}
+.cal-times span:first-child { transform: none; top: 2px !important; }

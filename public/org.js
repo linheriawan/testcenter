@@ -533,6 +533,7 @@ async function viewList(params) {
     }`;
 
   const apply = () => {
+    if (!document.getElementById('fq')) return; // the page changed before a delayed search fired
     const p = new URLSearchParams();
     const vals = { q: 'fq', standard: 'fs', division: 'fd', recommendation: 'fr', box: 'fb' };
     for (const [k, id] of Object.entries(vals)) {
@@ -1033,6 +1034,7 @@ function statusChips(tests) {
 async function viewInvites(params) {
   const main = shell('undangan', loading());
   const inviteFilter = params.get('gelombang') || '';
+  const emailFor = params.get('email') || '';
   const [{ invites }, { participants }] = await Promise.all([
     api(`/api/org/${S.org.id}/invites`),
     api(`/api/org/${S.org.id}/participants${inviteFilter ? `?invite=${encodeURIComponent(inviteFilter)}` : ''}`)
@@ -1064,6 +1066,7 @@ async function viewInvites(params) {
     </form>`
         : ''
     }
+    ${emailFor && editor ? '<div id="emailPanel"></div>' : ''}
     <div class="card">
       <h2>Gelombang asesmen</h2>
       ${
@@ -1078,7 +1081,11 @@ async function viewInvites(params) {
             <td>${i.tests.map((t) => TEST_NAMES[t] || t).join(', ')}</td>
             <td class="num"><a href="#/o/${S.org.id}/undangan?gelombang=${i.id}">${i.joined}</a></td>
             <td>${i.active ? '<span class="chip rec-disarankan">Aktif</span>' : '<span class="chip chip-plain">Ditutup</span>'}</td>
-            <td>${editor ? `<button class="link" type="button" data-toggle="${i.id}" data-active="${i.active ? 0 : 1}">${i.active ? 'Tutup' : 'Buka lagi'}</button>` : ''}</td>
+            <td style="white-space:nowrap">${
+              editor
+                ? `${i.active ? `<a href="#/o/${S.org.id}/undangan?email=${i.id}">Undang via email</a> · ` : ''}<button class="link" type="button" data-toggle="${i.id}" data-active="${i.active ? 0 : 1}">${i.active ? 'Tutup' : 'Buka lagi'}</button>`
+                : ''
+            }</td>
           </tr>`
           )
           .join('')}</tbody></table></div>`
@@ -1114,6 +1121,7 @@ async function viewInvites(params) {
       }
     </div>`;
 
+  if (emailFor && editor) await emailPanel(invites.find((i) => i.id === emailFor));
   const ps = document.getElementById('psearch');
   if (ps)
     ps.addEventListener('input', () => {
@@ -1163,6 +1171,43 @@ async function viewInvites(params) {
         document.getElementById('ierr').innerHTML = `<div class="error">${esc(err.message)}</div>`;
       }
     });
+}
+
+const EMAIL_STATUS = { pending: ['Menunggu', 'chip-plain'], accepted: ['Diterima', 'rec-disarankan'], declined: ['Ditolak', 'rec-tidak'] };
+
+async function emailPanel(inv) {
+  const box = document.getElementById('emailPanel');
+  if (!box || !inv) return;
+  const { emails } = await api(`/api/org/${S.org.id}/invites/${inv.id}/emails`);
+  box.innerHTML = `<form class="card" id="ef">
+    <div class="page-head"><h2>Undang via email · ${esc(inv.name)}</h2><a href="#/o/${S.org.id}/undangan">Tutup</a></div>
+    <p class="sub">Undangan muncul di aplikasi orang tersebut setelah ia masuk. Jika emailnya belum terdaftar, undangan menunggu sampai ia mendaftar dengan email yang sama. Aplikasi belum mengirim email otomatis, jadi kabari mereka juga lewat email atau WhatsApp dengan tautan: <code>${esc(inviteLink(inv.code))}</code></p>
+    <div class="field"><label for="emails">Alamat email</label><textarea class="input" id="emails" placeholder="satu email per baris, atau pisahkan dengan koma" style="min-height:110px"></textarea></div>
+    <div id="emsg"></div>
+    <div class="actions"><button class="btn btn-primary" type="submit">Kirim undangan</button></div>
+    ${
+      emails.length
+        ? `<div class="table-wrap"><table><thead><tr><th>Email</th><th>Akun</th><th>Status</th><th>Diundang</th></tr></thead><tbody>${emails
+            .map(
+              (e) => `<tr><td>${esc(e.email)}</td><td>${e.registered ? 'Terdaftar' : '<span class="muted">Belum daftar</span>'}</td><td><span class="chip ${EMAIL_STATUS[e.status][1]}">${EMAIL_STATUS[e.status][0]}</span></td><td>${esc(e.created_at.slice(0, 10))}</td></tr>`
+            )
+            .join('')}</tbody></table></div>`
+        : ''
+    }
+  </form>`;
+  document.getElementById('ef').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try {
+      const r = await api(`/api/org/${S.org.id}/invites/${inv.id}/emails`, { method: 'POST', body: { emails: document.getElementById('emails').value } });
+      await emailPanel(inv);
+      document.getElementById('emsg').innerHTML = `<div class="notice">${r.added} undangan tersimpan · ${r.registered} sudah punya akun dan langsung melihatnya di aplikasi.${
+        r.invalid.length ? ` Diabaikan karena tidak valid: ${esc(r.invalid.join(', '))}` : ''
+      }</div>`;
+    } catch (err) {
+      document.getElementById('emsg').innerHTML = `<div class="error">${esc(err.message)}</div>`;
+    }
+  });
+  box.scrollIntoView({ block: 'start' });
 }
 
 function krSpark(values) {

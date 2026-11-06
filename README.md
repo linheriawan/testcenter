@@ -8,6 +8,28 @@ Runs as a single Cloudflare Worker: static frontend (`public/`) plus the API (`s
 - `/app/` — the assessment app (`public/app/index.html`, `public/app.js`)
 - `/org/` — corporate portal in Bahasa Indonesia (`public/org/index.html`, `public/org.js`)
 
+## Pages and roles
+
+| Page | Who | What |
+| --- | --- | --- |
+| `/` | everyone | Front page (Bahasa Indonesia) with partnership form |
+| `/app/` | app users (students, jobseekers, employees) | Tests, results, profile/CV, invitations, booking a psychologist |
+| `/org/` | organization members (admin / assessor / viewer) | Talent assessment portal for one organization |
+| `/psikolog/` | users with role `psychologist` | Calendar of consultations and assessment sessions, working hours, client results |
+| `/admin/` | platform admins (`ADMIN_EMAILS`) | App users, roles, account deletion, organizations, partnership inquiries |
+
+**Psychologists:** a psychologist registers in the app like anyone else; a platform admin then sets the
+role to *Psikolog* in `/admin/`. The psychologist sets a profile (name, SIPP, bio) and working hours
+(days, hours, slot length, days off) in `/psikolog/`. App users see free slots on the Consult page and
+request a time; the psychologist confirms or declines, adds a meeting link (Google Meet, Zoom, or a
+location), and can keep private encrypted notes. Psychologists can also schedule assessment sessions
+(interviews, LGD) for employees of organizations they belong to. A psychologist can see test results
+only for their own clients or for participants in their organizations. All times are WIB.
+
+**Invitations by email:** in the portal's *Undangan & Tes*, assessors can invite app users by email.
+Registered users see the invitation on their home screen; others see it once they register with that
+email. No email is sent by the app yet, so share the invite link by email or WhatsApp too.
+
 ## Corporate module (Portal Organisasi)
 
 Talent assessment for companies, following the assessment-center method: a psychologist scores
@@ -129,7 +151,6 @@ npm run dev
 | POST | `/api/tests/:id/submit` | `{ answers: [1..5, …] }` |
 | GET | `/api/results` | latest result per test plus AI matches |
 | POST | `/api/insights` | generate AI matches |
-| GET / POST | `/api/bookings` | consultation requests |
 | POST | `/api/inquiries` | partnership inquiry from the front page (no login) |
 | GET | `/api/org/mine` | organizations the user belongs to |
 | POST | `/api/admin/orgs` | create organization (platform admin) |
@@ -145,6 +166,14 @@ npm run dev
 | GET | `/api/join/:code` | public invite info |
 | POST | `/api/join` | join an organization with consent |
 | POST | `/api/kraepelin/start`, `/api/kraepelin/submit` | Kraepelin session and scoring |
+| GET / POST | `/api/org/:id/invites/:iid/emails` | invite app users by email |
+| GET | `/api/invitations`; POST `/api/invitations/:id/decline` | a user's pending invitations |
+| GET | `/api/psychologists`, `/api/slots?psychologist=&days=` | psychologists and free slots |
+| GET / POST | `/api/bookings`; POST `/api/bookings/:id/cancel` | a user's sessions |
+| GET / PUT | `/api/psych/me` | psychologist profile and working hours |
+| GET / POST / PUT | `/api/psych/appointments[/:id]` | calendar, create, confirm/decline/done/cancel, reschedule, notes |
+| GET | `/api/psych/people?q=`, `/api/psych/clients/:userId` | find people to schedule, client profile and results |
+| GET / PUT / DELETE | `/api/admin/users[/:id]`, GET `/api/admin/stats`, GET/PUT `/api/admin/inquiries[/:id]` | platform admin |
 
 ## Next steps
 

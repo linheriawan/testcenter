@@ -458,6 +458,50 @@ async function updateInvite(request, env, user, orgId, inviteId) {
   return json({ ok: true });
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Invite app users by email: the invitation shows up in their app (after they register, if they haven't yet).
+async function addInviteEmails(request, env, user, orgId, inviteId) {
+  await orgAccess(env, user, orgId, 'assessor');
+  const inv = await env.DB.prepare('SELECT id FROM org_invites WHERE id = ? AND org_id = ?').bind(inviteId, orgId).first();
+  if (!inv) throw new HttpError(404, 'Undangan tidak ditemukan');
+  const body = await readJson(request, 100_000);
+  const all = String(body.emails || '')
+    .split(/[\s,;]+/)
+    .map((e) => e.replace(/["'<>]/g, '').trim().toLowerCase())
+    .filter(Boolean);
+  const valid = [...new Set(all.filter((e) => EMAIL_RE.test(e)))].slice(0, 500);
+  const invalid = all.filter((e) => !EMAIL_RE.test(e));
+  if (!valid.length) throw new HttpError(400, 'Tidak ada email yang valid');
+  const ts = now();
+  const stmts = valid.map((e) =>
+    env.DB.prepare(
+      `INSERT INTO org_invite_emails (id, invite_id, org_id, email, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)
+       ON CONFLICT(invite_id, email) DO UPDATE SET status = CASE WHEN status = 'accepted' THEN 'accepted' ELSE 'pending' END`
+    ).bind(randomId(), inviteId, orgId, e, ts)
+  );
+  for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
+  const registered = valid.length
+    ? (
+        await env.DB.prepare(`SELECT COUNT(*) AS n FROM users WHERE email IN (${valid.map(() => '?').join(',')})`)
+          .bind(...valid)
+          .first()
+      ).n
+    : 0;
+  return json({ added: valid.length, registered, invalid }, 201);
+}
+
+async function listInviteEmails(env, user, orgId, inviteId) {
+  await orgAccess(env, user, orgId, 'viewer');
+  const { results } = await env.DB.prepare(
+    `SELECT e.email, e.status, e.created_at, e.responded_at, (u.id IS NOT NULL) AS registered
+     FROM org_invite_emails e LEFT JOIN users u ON u.email = e.email WHERE e.invite_id = ? AND e.org_id = ? ORDER BY e.created_at DESC`
+  )
+    .bind(inviteId, orgId)
+    .all();
+  return json({ emails: results || [] });
+}
+
 function testStatus(done, joinedAt, tests) {
   const out = {};
   for (const t of tests) out[t] = done[t] && done[t].completedAt >= joinedAt ? done[t].completedAt : null;
@@ -689,9 +733,9 @@ export async function handleOrg(request, env, path, m, user) {
   if (path === '/api/org/mine' && m === 'GET') return myOrgs(env, user);
   if (path === '/api/admin/orgs' && m === 'POST') return createOrg(request, env, user);
 
-  const r = path.match(/^\/api\/org\/([0-9a-f-]{36})(?:\/([a-z]+)(?:\/([0-9a-f-]{36}|import))?)?$/);
+  const r = path.match(/^\/api\/org\/([0-9a-f-]{36})(?:\/([a-z]+)(?:\/([0-9a-f-]{36}|import)(?:\/(emails))?)?)?$/);
   if (!r) return null;
-  const [, orgId, section, sub] = r;
+  const [, orgId, section, sub, extra] = r;
 
   if (!section && m === 'GET') return getOrg(env, user, orgId);
   if (section === 'settings' && m === 'PUT') return saveSettings(request, env, user, orgId);
@@ -699,6 +743,9 @@ export async function handleOrg(request, env, path, m, user) {
   if (section === 'demo' && m === 'POST') return seedDemo(env, user, orgId);
 
   if (section === 'invites') {
+    if (sub && extra === 'emails' && m === 'GET') return listInviteEmails(env, user, orgId, sub);
+    if (sub && extra === 'emails' && m === 'POST') return addInviteEmails(request, env, user, orgId, sub);
+    if (extra) return null;
     if (!sub && m === 'GET') return listInvites(env, user, orgId);
     if (!sub && m === 'POST') return createInvite(request, env, user, orgId);
     if (sub && m === 'PUT') return updateInvite(request, env, user, orgId, sub);
