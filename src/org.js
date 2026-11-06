@@ -26,9 +26,10 @@ const DEFAULT_STANDARDS = [
 // ---------------- access ----------------
 
 export function isPlatformAdmin(env, user) {
+  // Tolerant of quotes, spaces, semicolons and line breaks in the secret's value.
   const list = String(env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
+    .split(/[\s,;]+/)
+    .map((e) => e.replace(/["'<>]/g, '').trim().toLowerCase())
     .filter(Boolean);
   return !!user && list.includes(String(user.email).toLowerCase());
 }
