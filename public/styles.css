@@ -188,3 +188,42 @@ ul.plain { margin: 0; padding-left: 18px; display: flex; flex-direction: column;
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- desktop & laptop ---------- */
+.nav-brand { display: none; }
+
+@media (min-width: 900px) {
+  html, body { background: var(--bg); }
+  .app, .app.tinted { max-width: none; background: var(--bg); }
+  .screen { width: 100%; max-width: 1080px; margin: 0 auto; padding: 32px 32px 48px; }
+  .screen.with-nav { padding-bottom: 48px; }
+
+  /* Focused screens (forms, tests) sit in a centered white panel. */
+  .screen.narrow-s, .screen.narrow-m {
+    background: #FFFFFF; border: 1px solid var(--line); border-radius: 24px;
+    margin: 40px auto; padding: 36px 40px; flex: 0 0 auto;
+  }
+  .screen.narrow-s { max-width: 520px; }
+  .screen.narrow-m { max-width: 760px; }
+
+  /* Top navigation instead of the bottom tab bar. */
+  .nav {
+    position: sticky; top: 0; left: auto; transform: none; order: -1; max-width: none;
+    height: 64px; padding: 0 max(32px, calc((100% - 1080px) / 2 + 32px));
+    display: flex; align-items: center; gap: 6px; border-top: 0; border-bottom: 1px solid var(--line);
+  }
+  .nav .nav-brand { display: flex; align-items: center; gap: 10px; margin-right: auto; font-size: 17px; font-weight: 800; color: var(--ink) !important; flex-direction: row !important; }
+  .nav-brand .brand-mark { width: 32px; height: 32px; }
+  .nav a:not(.nav-brand) { flex-direction: row; gap: 8px; height: 40px; padding: 0 14px; border-radius: 10px; font-size: 14.5px; }
+  .nav a:not(.nav-brand):hover { background: var(--bg); }
+  .nav a.on { background: var(--accent-soft); }
+
+  .test-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px !important; }
+  .results-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 18px; }
+  .results-grid > h1, .results-grid > .btn, .results-grid > p { grid-column: 1 / -1; }
+  .results-grid > .btn { max-width: 360px; }
+
+  /* Larger question text and answer targets for tests on a big screen. */
+  .narrow-m .likert button { min-height: 56px; font-size: 16px; }
+  .narrow-m .pair div { font-size: 16px; padding: 20px; }
+}

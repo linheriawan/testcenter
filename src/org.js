@@ -544,6 +544,24 @@ async function getParticipant(env, user, orgId, pid) {
   return json({ participant: { ...base, results, suggestions: suggestScores(results) } });
 }
 
+async function updateParticipant(request, env, user, orgId, pid) {
+  await orgAccess(env, user, orgId, 'assessor');
+  const body = await readJson(request);
+  const r = await env.DB.prepare('UPDATE org_participants SET nik = ?, position = ?, division = ? WHERE id = ? AND org_id = ?')
+    .bind(str(body.nik, 40), str(body.position, 160), str(body.division, 120), pid, orgId)
+    .run();
+  if (!r.meta.changes) throw new HttpError(404, 'Peserta tidak ditemukan');
+  return json({ ok: true });
+}
+
+// Removes the employee from this organization. Their own account and test results stay theirs;
+// an assessment (psikogram) already made from their results stays in the Peserta list.
+async function removeParticipant(env, user, orgId, pid) {
+  await orgAccess(env, user, orgId, 'admin');
+  await env.DB.prepare('DELETE FROM org_participants WHERE id = ? AND org_id = ?').bind(pid, orgId).run();
+  return json({ ok: true });
+}
+
 // ---------------- dashboard ----------------
 
 async function dashboard(request, env, user, orgId) {
@@ -688,6 +706,8 @@ export async function handleOrg(request, env, path, m, user) {
   if (section === 'participants') {
     if (!sub && m === 'GET') return listParticipants(request, env, user, orgId);
     if (sub && m === 'GET') return getParticipant(env, user, orgId, sub);
+    if (sub && m === 'PUT') return updateParticipant(request, env, user, orgId, sub);
+    if (sub && m === 'DELETE') return removeParticipant(env, user, orgId, sub);
   }
   if (section === 'members') {
     if (!sub && m === 'GET') return listMembers(env, user, orgId);

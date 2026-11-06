@@ -108,7 +108,7 @@ function nav(active) {
     ['#/consult', 'chat', 'Consult'],
     ['#/account', 'user', 'Account']
   ];
-  return `<nav class="nav" aria-label="Main">${items
+  return `<nav class="nav" aria-label="Main"><a class="nav-brand" href="/"><span class="brand-mark">${icon('compass', 18, '#FFFFFF')}</span>Test Center</a>${items
     .map(([h, i, label]) => `<a href="${h}" class="${active === h ? 'on' : ''}" ${active === h ? 'aria-current="page"' : ''}>${icon(i)}${label}</a>`)
     .join('')}</nav>`;
 }
@@ -126,7 +126,7 @@ function loading(text = 'Loading…') {
 
 function viewRegister() {
   app.className = 'app';
-  app.innerHTML = `<section class="screen">
+  app.innerHTML = `<section class="screen narrow-s">
     <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">${icon('compass', 20, '#FFFFFF')}</span>Test Center</a>
     <div class="stack-sm">
       <h1 class="h1">Find the path that fits you</h1>
@@ -166,7 +166,7 @@ function viewRegister() {
 
 function viewLogin() {
   app.className = 'app';
-  app.innerHTML = `<section class="screen">
+  app.innerHTML = `<section class="screen narrow-s">
     <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">${icon('compass', 20, '#FFFFFF')}</span>Test Center</a>
     <div class="stack-sm">
       <h1 class="h1">Welcome back</h1>
@@ -292,7 +292,7 @@ function renderProfileForm() {
   const student = draft.segment === 'student';
   const opts = EDU_OPTIONS[draft.segment] || EDU_OPTIONS.jobseeker;
   app.className = 'app';
-  app.innerHTML = `<section class="screen">
+  app.innerHTML = `<section class="screen narrow-m">
     ${topbar(state.hasProfile ? 'Edit profile' : 'Step 2 of 2', state.hasProfile ? '#/account' : '#/home')}
     ${state.hasProfile ? '' : '<div class="progress"><div style="width:100%"></div></div>'}
     <div class="stack-sm">
@@ -452,7 +452,7 @@ async function viewHome() {
       </div>
     </div>
     <h2 class="h2">Tests</h2>
-    <div class="stack-sm" style="gap:10px">
+    <div class="stack-sm test-grid" style="gap:10px">
       ${tests
         .map((t) => {
           const [bg, fg] = TEST_COLORS[t.id] || TEST_COLORS.values;
@@ -532,7 +532,7 @@ async function viewTest(id) {
     }
 
     app.className = 'app';
-    app.innerHTML = `<section class="screen">
+    app.innerHTML = `<section class="screen narrow-m">
       ${topbar(test.name, '#/home', 'close')}
       <div class="stack-sm">
         <div class="row between small" style="font-size:13px"><span>Question ${index + 1} of ${total}</span><span>${answered} answered</span></div>
@@ -641,7 +641,7 @@ async function viewResults() {
       </section>${nav('#/results')}`;
       return;
     }
-    app.innerHTML = `<section class="screen with-nav">
+    app.innerHTML = `<section class="screen results-grid with-nav">
       <h1 class="h1" style="font-size:24px">Your results</h1>
       ${
         type16
@@ -738,7 +738,7 @@ async function viewConsult() {
 
   const draw = () => {
     app.className = 'app';
-    app.innerHTML = `<section class="screen with-nav">
+    app.innerHTML = `<section class="screen narrow-m with-nav">
       <h1 class="h1" style="font-size:22px">Talk to a psychologist</h1>
       <div class="card" style="flex-direction:row;align-items:center;gap:14px;padding:14px">
         <div style="width:56px;height:56px;border-radius:28px;background:#E7E8FB;color:#272BA8;font-weight:800;display:flex;align-items:center;justify-content:center">PS</div>
@@ -802,7 +802,7 @@ async function viewConsult() {
 
 function viewAccount() {
   app.className = 'app tinted';
-  app.innerHTML = `<section class="screen with-nav">
+  app.innerHTML = `<section class="screen narrow-m with-nav">
     <h1 class="h1" style="font-size:22px">Account</h1>
     <div class="card"><b style="font-size:16px">${esc(state.user.name)}</b><span class="small">${esc(state.user.email)}</span></div>
     <div class="card" style="gap:0;padding:6px 18px">
@@ -849,7 +849,7 @@ async function viewJoin(code) {
     } catch {
       /* ignore */
     }
-    app.innerHTML = `<section class="screen">${head}
+    app.innerHTML = `<section class="screen narrow-s">${head}
       <p class="small">Create an account (or log in) to continue. Use your own email; your results stay linked to your account.</p>
       <div class="stack-sm push">
         <a class="btn btn-primary" href="#/register">Create account</a>
@@ -858,7 +858,7 @@ async function viewJoin(code) {
     </section>`;
     return;
   }
-  app.innerHTML = `<section class="screen">${head}
+  app.innerHTML = `<section class="screen narrow-s">${head}
     <form id="jf" class="stack" novalidate>
       <div class="field"><label for="nik">Employee ID (NIK) <span class="small">(optional)</span></label><input class="input" id="nik" maxlength="40"></div>
       <div class="field"><label for="pos">Current position <span class="small">(optional)</span></label><input class="input" id="pos" maxlength="160"></div>
@@ -901,7 +901,7 @@ function sparkline(values, w = 300, h = 60) {
   if (!values || values.length < 2) return '';
   const max = Math.max(...values, 1);
   const pts = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - (v / max) * (h - 6) - 3).toFixed(1)}`).join(' ');
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Answers per column over time"><polyline points="${pts}" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linejoin="round"></polyline></svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" role="img" aria-label="Answers per column over time"><polyline points="${pts}" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline></svg>`;
 }
 
 function kraepelinCard(k) {
@@ -944,7 +944,7 @@ async function viewKraepelin() {
 
   const intro = () => {
     app.className = 'app';
-    app.innerHTML = `<section class="screen">
+    app.innerHTML = `<section class="screen narrow-m">
       ${topbar('Work attitude test', '#/home', 'close')}
       <h1 class="h1" style="font-size:24px">How it works</h1>
       <p class="lead" style="font-size:15px">Add the two numbers shown and enter only the <b>last digit</b> of the sum.</p>
@@ -990,7 +990,7 @@ async function viewKraepelin() {
     if (!practice) document.addEventListener('visibilitychange', onVis);
 
     app.className = 'app';
-    app.innerHTML = `<section class="screen" style="gap:14px">
+    app.innerHTML = `<section class="screen narrow-m" style="gap:14px">
       <div class="row between small" style="font-size:13px">
         <span id="krCol">${practice ? 'Practice' : `Column 1 of ${columns}`}</span>
         <span id="krCount">0 answered</span>
@@ -1033,7 +1033,7 @@ async function viewKraepelin() {
     const finish = async () => {
       krCleanup();
       if (practice) {
-        app.innerHTML = `<section class="screen">
+        app.innerHTML = `<section class="screen narrow-m">
           ${topbar('Practice done', '#/home', 'close')}
           <div class="card"><b style="font-size:18px">${answers[0].length} answers, ${correctPractice} correct</b>
           <span class="small">In the real test you won't see whether an answer is right. Just keep a steady pace.</span></div>

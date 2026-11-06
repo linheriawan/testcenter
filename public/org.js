@@ -1086,14 +1086,18 @@ async function viewInvites(params) {
       }
     </div>
     <div class="card">
-      <div class="page-head"><h2>Peserta tes online${inviteFilter ? ' · ' + esc(invites.find((i) => i.id === inviteFilter)?.name || '') : ''}</h2>${inviteFilter ? `<a href="#/o/${S.org.id}/undangan">Tampilkan semua</a>` : ''}</div>
+      <div class="page-head"><h2>Peserta tes online${inviteFilter ? ' · ' + esc(invites.find((i) => i.id === inviteFilter)?.name || '') : ''}</h2>
+        <div class="actions">${inviteFilter ? `<a href="#/o/${S.org.id}/undangan">Tampilkan semua</a>` : ''}${
+          participants.length ? `<button class="btn btn-outline" type="button" id="pexp">${icon(IC.download)}Unduh CSV</button>` : ''
+        }</div></div>
+      ${participants.length > 5 ? '<div class="field"><label for="psearch" class="sr-only">Cari peserta</label><input class="input" id="psearch" placeholder="Cari nama, NIK, email, jabatan, atau divisi"></div>' : ''}
       ${
         participants.length
           ? `<div class="table-wrap"><table>
         <thead><tr><th>Nama</th><th>Jabatan / Divisi</th><th>Gelombang</th><th>Tes</th><th><span class="sr-only">Aksi</span></th></tr></thead>
-        <tbody>${participants
+        <tbody id="ptbody">${participants
           .map(
-            (p) => `<tr>
+            (p) => `<tr data-search="${esc([p.name, p.email, p.nik, p.position, p.division].join(' ').toLowerCase())}">
             <td><a class="nm" href="#/o/${S.org.id}/undangan/p/${p.id}">${esc(p.name)}</a><div class="small muted">${esc(p.nik || p.email)}</div></td>
             <td>${esc(p.position || '-')}<div class="small muted">${esc(p.division || '')}</div></td>
             <td>${esc(p.invite_name)}</td>
@@ -1110,6 +1114,24 @@ async function viewInvites(params) {
       }
     </div>`;
 
+  const ps = document.getElementById('psearch');
+  if (ps)
+    ps.addEventListener('input', () => {
+      const q = ps.value.trim().toLowerCase();
+      document.querySelectorAll('#ptbody tr').forEach((tr) => (tr.hidden = q && !tr.dataset.search.includes(q)));
+    });
+  const pexp = document.getElementById('pexp');
+  if (pexp)
+    pexp.addEventListener('click', () => {
+      const tests = ['kraepelin', 'bigfive', 'type16'];
+      const header = ['Nama', 'Email', 'NIK', 'Jabatan', 'Divisi', 'Gelombang', 'Bergabung', ...tests.map((t) => `${TEST_NAMES[t]} selesai`), 'Psikogram dibuat'];
+      const rows = participants.map((p) => [
+        p.name, p.email, p.nik, p.position, p.division, p.invite_name, p.joined_at.slice(0, 10),
+        ...tests.map((t) => (t in p.tests ? (p.tests[t] ? p.tests[t].slice(0, 10) : 'belum') : '-')),
+        p.assessment_id ? 'ya' : 'belum'
+      ]);
+      downloadCsv('peserta-tes-online.csv', [header, ...rows]);
+    });
   main.querySelectorAll('[data-copy]').forEach((b) =>
     b.addEventListener('click', async () => {
       try {
@@ -1207,9 +1229,48 @@ async function viewParticipant(pid) {
             : ''
       }</div></div>
     <div class="page-head"><div><h1>${esc(p.name)}</h1><p>${esc([p.nik, p.position, p.division].filter(Boolean).join(' · ') || p.email)} · ${esc(p.invite_name)}</p></div></div>
+    ${
+      can('assessor')
+        ? `<form class="card" id="pedit">
+      <h2>Data karyawan</h2>
+      <div class="grid cols-form">
+        <div class="field"><label for="pnik">NIK</label><input class="input" id="pnik" value="${esc(p.nik || '')}" maxlength="40"></div>
+        <div class="field"><label for="ppos">Jabatan</label><input class="input" id="ppos" value="${esc(p.position || '')}" maxlength="160"></div>
+        <div class="field"><label for="pdiv">Divisi</label><input class="input" id="pdiv" value="${esc(p.division || '')}" maxlength="120"></div>
+      </div>
+      <p class="small muted">Nama dan email (${esc(p.email)}) berasal dari akun karyawan dan hanya bisa diubah oleh karyawan sendiri.</p>
+      <div id="pmsg"></div>
+      <div class="actions"><button class="btn btn-primary" type="submit">Simpan</button>${
+        can('admin') ? '<button class="btn btn-danger" type="button" id="prm">Keluarkan dari organisasi</button>' : ''
+      }</div>
+    </form>`
+        : ''
+    }
     <div class="card"><h2>Status tes</h2><div>${statusChips(p.tests)}</div><p class="small muted">Bergabung ${esc(p.joined_at.slice(0, 10))}, persetujuan berbagi hasil diberikan ${esc(p.consent_at.slice(0, 10))}. Hanya tes yang dikerjakan setelah bergabung yang dihitung.</p></div>
     ${data.restricted ? '<div class="notice">Hasil tes psikologi hanya dapat dilihat oleh psikolog dan asesor. Peran Anda dapat melihat status tes dan psikogram yang sudah final.</div>' : ''}
     ${krBlock}${b5Block}${t16Block}${sugBlock}`;
+
+  const pe = document.getElementById('pedit');
+  if (pe)
+    pe.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api(`/api/org/${S.org.id}/participants/${pid}`, {
+          method: 'PUT',
+          body: { nik: pe.querySelector('#pnik').value, position: pe.querySelector('#ppos').value, division: pe.querySelector('#pdiv').value }
+        });
+        document.getElementById('pmsg').innerHTML = '<div class="notice">Data tersimpan.</div>';
+      } catch (err) {
+        document.getElementById('pmsg').innerHTML = `<div class="error">${esc(err.message)}</div>`;
+      }
+    });
+  const rm = document.getElementById('prm');
+  if (rm)
+    rm.addEventListener('click', async () => {
+      if (!confirm(`Keluarkan ${p.name} dari organisasi? Organisasi tidak lagi bisa melihat hasil tesnya. Psikogram yang sudah dibuat tetap tersimpan di daftar Peserta.`)) return;
+      await api(`/api/org/${S.org.id}/participants/${pid}`, { method: 'DELETE' });
+      go(`#/o/${S.org.id}/undangan`);
+    });
 }
 
 // ---------------- standards ----------------
