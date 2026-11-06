@@ -53,6 +53,17 @@ function goNext() {
   return false;
 }
 
+function applyMe(m) {
+  state.user = m.user;
+  state.hasProfile = !!m.hasProfile;
+  state.hasOrg = !!m.hasOrg;
+  state.isAdmin = !!m.isAdmin;
+  state.isPsychologist = !!m.isPsychologist;
+  state.birthDate = m.birthDate || null;
+  state.minor = !!m.minor;
+  state.guardianConsent = !!m.guardianConsent;
+}
+
 function go(hash) {
   if (location.hash === hash) render();
   else location.hash = hash;
@@ -136,6 +147,7 @@ function viewRegister() {
       <div class="field"><label for="name">Full name</label><input class="input" id="name" name="name" autocomplete="name" placeholder="As on your ID card" required></div>
       <div class="field"><label for="email">Email</label><input class="input" id="email" name="email" type="email" autocomplete="email" placeholder="you@email.com" required></div>
       <div class="field"><label for="phone">WhatsApp number</label><input class="input" id="phone" name="phone" type="tel" autocomplete="tel" placeholder="08xx xxxx xxxx"></div>
+      <div class="field"><label for="birth">Date of birth</label><input class="input" id="birth" name="birth" type="date" autocomplete="bday" required max="${new Date().toISOString().slice(0, 10)}"><span class="small">Users under 18 need a parent's consent before sharing results or booking a psychologist.</span></div>
       <div class="field"><label for="password">Password</label><input class="input" id="password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" required minlength="8"></div>
       <div class="check"><input id="consent" name="consent" type="checkbox"><label for="consent">I agree to the Terms and to the processing of my personal data as described in the Privacy Policy (UU PDP).</label></div>
       <div id="err"></div>
@@ -151,10 +163,11 @@ function viewRegister() {
     try {
       const d = await api('/api/auth/register', {
         method: 'POST',
-        body: { name: f.name.value, email: f.email.value, phone: f.phone.value, password: f.password.value, consent: f.consent.checked }
+        body: { name: f.name.value, email: f.email.value, phone: f.phone.value, birth_date: f.birth.value, password: f.password.value, consent: f.consent.checked }
       });
       state.user = d.user;
       state.hasProfile = false;
+      applyMe(await api('/api/me'));
       if (goNext()) return;
       go('#/profile');
     } catch (err) {
@@ -192,7 +205,7 @@ function viewLogin() {
       state.hasProfile = m.hasProfile;
       state.hasOrg = !!m.hasOrg;
       state.isAdmin = !!m.isAdmin;
-      state.isPsychologist = !!m.isPsychologist;
+      applyMe(m);
       if (goNext()) return;
       go(state.hasProfile ? '#/home' : '#/profile');
     } catch (err) {
@@ -416,7 +429,8 @@ const TEST_COLORS = {
 
 async function viewHome() {
   loading();
-  const [{ tests, assignments }, { invitations }] = await Promise.all([api('/api/tests'), api('/api/invitations')]);
+  const [{ tests, assignments }, { invitations }, me] = await Promise.all([api('/api/tests'), api('/api/invitations'), api('/api/me')]);
+  applyMe(me);
   const core = tests.filter((t) => t.status !== 'soon' && t.id !== 'kraepelin');
   const done = core.filter((t) => t.status === 'done').length;
   const first = (state.user?.name || '').split(' ')[0];
@@ -430,6 +444,17 @@ async function viewHome() {
       state.hasProfile
         ? ''
         : `<a class="card" href="#/profile" style="text-decoration:none;color:inherit"><b>Complete your profile</b><span class="small">Add your education and CV details so your matches fit you.</span></a>`
+    }
+    ${
+      !state.birthDate
+        ? `<form class="card" id="bdf"><b>Add your date of birth</b><span class="small">We need it once to apply the right privacy rules. Users under 18 need a parent's consent before sharing results.</span>
+        <div class="row"><label for="bd" class="sr-only">Date of birth</label><input class="input" id="bd" type="date" required max="${new Date().toISOString().slice(0, 10)}" style="flex:1"><button class="btn btn-primary btn-sm" type="submit">Save</button></div><div id="bderr"></div></form>`
+        : ''
+    }
+    ${
+      state.minor && !state.guardianConsent
+        ? `<div class="card" style="border-color:#9EA2F5"><b>You're under 18</b><span class="small">You can take the free tests and see your own results. To share results with your school or talk to a psychologist, your parent or guardian needs to sign a consent form at your school. Your school records it here once received.</span></div>`
+        : ''
     }
     ${(invitations || [])
       .map(
@@ -448,7 +473,9 @@ async function viewHome() {
           <span class="eyebrow" style="color:var(--warm)">Assessment from ${esc(a.org)}</span>
           <b style="font-size:16px">${esc(a.name)}</b>
           <ul class="plain">${a.tests.map((t) => `<li>${esc(t.name)}: ${t.done ? '<b style="color:var(--ok)">done</b>' : '<b>to do</b>'}</li>`).join('')}</ul>
-          <span class="small">${left.length ? 'Please complete the tests marked "Required" below. Your results are shared with the organization and its psychologist.' : 'All done. Thank you! The psychologist will review your results.'}</span>
+          <span class="small">${left.length ? 'Please complete the tests marked "Required" below. Your results are shared with the organization and its psychologist.' : 'All done. Thank you! The psychologist will review your results.'}${
+            state.minor && !state.guardianConsent ? ' Your results stay private until your school receives your parent\'s signed consent form.' : ''
+          }</span>
         </div>`;
       })
       .join('')}
@@ -493,6 +520,20 @@ async function viewHome() {
         .join('')}
     </div>
   </section>${nav('#/home')}`;
+  const bdf = document.getElementById('bdf');
+  if (bdf)
+    bdf.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const r = await api('/api/me/birthdate', { method: 'PUT', body: { birth_date: document.getElementById('bd').value } });
+        state.birthDate = document.getElementById('bd').value;
+        state.minor = r.minor;
+        state.guardianConsent = r.guardianConsent;
+        render();
+      } catch (err) {
+        showError(document.getElementById('bderr'), err.message);
+      }
+    });
   app.querySelectorAll('[data-decline]').forEach((b) =>
     b.addEventListener('click', async () => {
       if (!confirm('Decline this invitation? The organization will see that you declined.')) return;
@@ -753,7 +794,8 @@ function bookingCard(b, now) {
 
 async function viewConsult() {
   loading();
-  const [{ psychologists }, mine] = await Promise.all([api('/api/psychologists'), api('/api/bookings')]);
+  const [{ psychologists }, mine, me] = await Promise.all([api('/api/psychologists'), api('/api/bookings'), api('/api/me')]);
+  applyMe(me);
   const sel = { psych: psychologists[0]?.id || null, session: 'review', date: null, time: null, note: '' };
   let days = [];
   let notice = '';
@@ -792,7 +834,9 @@ async function viewConsult() {
       ${upcoming.length ? `<div class="stack-sm"><h2 class="h2" style="font-size:15px">Your upcoming sessions</h2>${upcoming.map((b) => bookingCard(b, now)).join('')}</div>` : ''}
       ${notice ? `<div class="notice" role="status">${esc(notice)}</div>` : ''}
       ${
-        !psychologists.length
+        state.minor && !state.guardianConsent
+          ? `<div class="card"><b>A parent's consent is needed first</b><span class="small">Because you're under 18, a psychologist can only meet you after your parent or guardian signs a consent form. If your school uses Test Center, ask your school counselor (guru BK) for the form.</span></div>`
+          : !psychologists.length
           ? '<div class="card"><b>No psychologist is available yet</b><span class="small">Please check back soon.</span></div>'
           : `
       <div class="stack-sm" style="gap:10px"><h2 class="h2" style="font-size:15px">Psychologist</h2>
@@ -961,6 +1005,7 @@ async function viewJoin(code) {
       <div class="field"><label for="nik">Employee ID (NIK) <span class="small">(optional)</span></label><input class="input" id="nik" maxlength="40"></div>
       <div class="field"><label for="pos">Current position <span class="small">(optional)</span></label><input class="input" id="pos" maxlength="160"></div>
       <div class="field"><label for="div">Division <span class="small">(optional)</span></label><input class="input" id="div" maxlength="120"></div>
+      ${state.birthDate ? '' : `<div class="field"><label for="jbd">Date of birth</label><input class="input" id="jbd" type="date" required max="${new Date().toISOString().slice(0, 10)}"></div>`}
       <div class="check"><input id="consent" type="checkbox"><label for="consent">I agree that my results from these tests are shared with ${esc(invite.org)} and its psychologist for this assessment. I can ask for my data to be deleted at any time.</label></div>
       <div id="err"></div>
       <button class="btn btn-primary" type="submit">Join and start</button>
@@ -979,9 +1024,11 @@ async function viewJoin(code) {
           nik: document.getElementById('nik').value,
           position: document.getElementById('pos').value,
           division: document.getElementById('div').value,
+          birth_date: document.getElementById('jbd') ? document.getElementById('jbd').value : undefined,
           consent: document.getElementById('consent').checked
         }
       });
+      applyMe(await api('/api/me'));
       go('#/home');
     } catch (err) {
       showError(document.getElementById('err'), err.message);
@@ -1248,7 +1295,7 @@ async function start() {
     state.hasProfile = !!m.hasProfile;
     state.hasOrg = !!m.hasOrg;
     state.isAdmin = !!m.isAdmin;
-    state.isPsychologist = !!m.isPsychologist;
+    applyMe(m);
   } catch (err) {
     app.innerHTML = `<section class="screen"><div class="error" role="alert">${esc(err.message)}</div></section>`;
     return;

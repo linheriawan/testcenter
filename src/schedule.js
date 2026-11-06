@@ -4,6 +4,7 @@
 import { HttpError, json, readJson, str, now } from './http.js';
 import { randomId } from './crypto.js';
 import { INVITE_TESTS } from './participant.js';
+import { canShare } from './guardian.js';
 
 export const SESSION_TYPES = {
   review: { label: 'Result review', minutes: 30 },
@@ -106,6 +107,9 @@ async function createBooking(request, env, user) {
   const body = await readJson(request);
   const type = SESSION_TYPES[body.session_type] ? body.session_type : null;
   if (!type) throw new HttpError(400, 'Please choose a session type');
+  if (!(await canShare(env, user.id))) {
+    throw new HttpError(403, "Consultations for users under 18 need a parent's or guardian's consent, recorded by your school.");
+  }
   const psych = await getPsych(env, str(body.psychologist_id, 40));
   const start = str(body.start_at, 16);
   if (!isStamp(start)) throw new HttpError(400, 'Please choose a time slot');

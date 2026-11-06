@@ -1108,7 +1108,7 @@ async function viewInvites(params) {
             <td><a class="nm" href="#/o/${S.org.id}/undangan/p/${p.id}">${esc(p.name)}</a><div class="small muted">${esc(p.nik || p.email)}</div></td>
             <td>${esc(p.position || '-')}<div class="small muted">${esc(p.division || '')}</div></td>
             <td>${esc(p.invite_name)}</td>
-            <td>${statusChips(p.tests)}</td>
+            <td>${statusChips(p.tests)}${p.minor ? ` <span class="chip ${p.guardian_consent ? 'rec-disarankan' : 'rec-catatan'}" title="Peserta di bawah 18 tahun">Ortu ${p.guardian_consent ? '✓' : ': menunggu'}</span>` : ''}</td>
             <td style="white-space:nowrap">${
               p.assessment_id
                 ? `<a href="#/o/${S.org.id}/peserta/${p.assessment_id}">Psikogram</a>`
@@ -1210,6 +1210,33 @@ async function emailPanel(inv) {
   box.scrollIntoView({ block: 'start' });
 }
 
+function isSchool() {
+  return ['sekolah', 'kampus'].includes(S.org && S.org.type);
+}
+
+function guardianCard(p) {
+  const g = p.guardian;
+  if (g) {
+    return `<div class="card" style="border-color:#9FD9CC"><h2>Persetujuan orang tua/wali ✓</h2>
+      <dl class="kv"><dt>Nama</dt><dd>${esc(g.guardian_name)}</dd><dt>Hubungan</dt><dd>${esc(g.relationship)}</dd><dt>Tanggal formulir</dt><dd>${esc(g.form_date || '-')}</dd><dt>Dicatat</dt><dd>${esc(g.recorded_at.slice(0, 10))}</dd></dl>
+      ${can('admin') ? '<div class="actions"><button class="btn btn-danger" type="button" id="grevoke">Tarik persetujuan</button></div><p class="small muted">Gunakan bila orang tua/wali meminta persetujuan dibatalkan.</p>' : ''}</div>`;
+  }
+  if (!can('assessor')) return '<div class="card" style="border-color:#F5C89B"><h2>Menunggu persetujuan orang tua/wali</h2><p class="muted">Peserta berusia di bawah 18 tahun.</p></div>';
+  return `<form class="card" id="gf" style="border-color:#F5C89B">
+    <h2>Persetujuan orang tua/wali</h2>
+    <p class="sub">Peserta berusia di bawah 18 tahun. Sesuai UU PDP, hasil tesnya baru dapat dilihat organisasi dan psikolog setelah orang tua/wali menandatangani formulir persetujuan. <a href="/formulir-persetujuan.html?org=${encodeURIComponent(S.org.name)}&nama=${encodeURIComponent(p.name)}" target="_blank" rel="noopener">Cetak formulir</a></p>
+    <div class="grid cols-form">
+      <div class="field"><label for="gname">Nama orang tua/wali</label><input class="input" id="gname" maxlength="160" required></div>
+      <div class="field"><label for="grel">Hubungan</label><select class="input" id="grel"><option>Ibu</option><option>Ayah</option><option>Wali</option></select></div>
+      <div class="field"><label for="gdate">Tanggal ditandatangani</label><input class="input" id="gdate" type="date"></div>
+    </div>
+    <div class="field"><label for="gnote">Catatan <span class="hint">(opsional, mis. lokasi arsip formulir)</span></label><input class="input" id="gnote" maxlength="500"></div>
+    <label class="small" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="gconf" style="margin-top:3px"> Saya menyatakan formulir persetujuan bertanda tangan orang tua/wali sudah diterima dan disimpan oleh organisasi.</label>
+    <div id="gmsg"></div>
+    <div class="actions"><button class="btn btn-primary" type="submit">Catat persetujuan</button></div>
+  </form>`;
+}
+
 function krSpark(values) {
   if (!values || values.length < 2) return '';
   const w = 600;
@@ -1277,13 +1304,13 @@ async function viewParticipant(pid) {
     ${
       can('assessor')
         ? `<form class="card" id="pedit">
-      <h2>Data karyawan</h2>
+      <h2>Data ${isSchool() ? 'siswa' : 'karyawan'}</h2>
       <div class="grid cols-form">
-        <div class="field"><label for="pnik">NIK</label><input class="input" id="pnik" value="${esc(p.nik || '')}" maxlength="40"></div>
-        <div class="field"><label for="ppos">Jabatan</label><input class="input" id="ppos" value="${esc(p.position || '')}" maxlength="160"></div>
-        <div class="field"><label for="pdiv">Divisi</label><input class="input" id="pdiv" value="${esc(p.division || '')}" maxlength="120"></div>
+        <div class="field"><label for="pnik">${isSchool() ? 'NIS / NIM' : 'NIK'}</label><input class="input" id="pnik" value="${esc(p.nik || '')}" maxlength="40"></div>
+        <div class="field"><label for="ppos">${isSchool() ? 'Kelas / jurusan' : 'Jabatan'}</label><input class="input" id="ppos" value="${esc(p.position || '')}" maxlength="160"></div>
+        <div class="field"><label for="pdiv">${isSchool() ? 'Peminatan / fakultas' : 'Divisi'}</label><input class="input" id="pdiv" value="${esc(p.division || '')}" maxlength="120"></div>
       </div>
-      <p class="small muted">Nama dan email (${esc(p.email)}) berasal dari akun karyawan dan hanya bisa diubah oleh karyawan sendiri.</p>
+      <p class="small muted">Nama dan email (${esc(p.email)}) berasal dari akun peserta dan hanya bisa diubah oleh peserta sendiri.</p>
       <div id="pmsg"></div>
       <div class="actions"><button class="btn btn-primary" type="submit">Simpan</button>${
         can('admin') ? '<button class="btn btn-danger" type="button" id="prm">Keluarkan dari organisasi</button>' : ''
@@ -1292,9 +1319,43 @@ async function viewParticipant(pid) {
         : ''
     }
     <div class="card"><h2>Status tes</h2><div>${statusChips(p.tests)}</div><p class="small muted">Bergabung ${esc(p.joined_at.slice(0, 10))}, persetujuan berbagi hasil diberikan ${esc(p.consent_at.slice(0, 10))}. Hanya tes yang dikerjakan setelah bergabung yang dihitung.</p></div>
-    ${data.restricted ? '<div class="notice">Hasil tes psikologi hanya dapat dilihat oleh psikolog dan asesor. Peran Anda dapat melihat status tes dan psikogram yang sudah final.</div>' : ''}
+    ${p.minor ? guardianCard(p) : ''}
+    ${
+      data.restricted
+        ? data.reason === 'guardian'
+          ? '<div class="notice">Peserta ini berusia di bawah 18 tahun. Hasil tesnya disembunyikan sampai persetujuan orang tua/wali dicatat di atas.</div>'
+          : '<div class="notice">Hasil tes psikologi hanya dapat dilihat oleh psikolog dan asesor. Peran Anda dapat melihat status tes dan psikogram yang sudah final.</div>'
+        : ''
+    }
     ${krBlock}${b5Block}${t16Block}${sugBlock}`;
 
+  const gf = document.getElementById('gf');
+  if (gf)
+    gf.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api(`/api/org/${S.org.id}/participants/${pid}/consent`, {
+          method: 'POST',
+          body: {
+            guardian_name: document.getElementById('gname').value,
+            relationship: document.getElementById('grel').value,
+            form_date: document.getElementById('gdate').value,
+            note: document.getElementById('gnote').value,
+            confirm: document.getElementById('gconf').checked
+          }
+        });
+        render();
+      } catch (err) {
+        document.getElementById('gmsg').innerHTML = `<div class="error">${esc(err.message)}</div>`;
+      }
+    });
+  const grv = document.getElementById('grevoke');
+  if (grv)
+    grv.addEventListener('click', async () => {
+      if (!confirm('Tarik persetujuan orang tua? Hasil tes siswa ini akan kembali disembunyikan dari organisasi dan psikolog.')) return;
+      await api(`/api/org/${S.org.id}/participants/${pid}/consent`, { method: 'DELETE' });
+      render();
+    });
   const pe = document.getElementById('pedit');
   if (pe)
     pe.addEventListener('submit', async (e) => {

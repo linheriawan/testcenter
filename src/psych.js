@@ -4,6 +4,7 @@ import { HttpError, json, readJson, str, now } from './http.js';
 import { randomId, encryptText, decryptText } from './crypto.js';
 import { isPlatformAdmin } from './org.js';
 import { latestResults } from './results.js';
+import { canShare } from './guardian.js';
 import { SESSION_TYPES, DEFAULT_AVAILABILITY, parseAvailability, busyIntervals, nowWib, toMin, fromMin, isStamp } from './schedule.js';
 
 const KINDS = { consult: 'Konsultasi', assessment: 'Asesmen' };
@@ -129,12 +130,14 @@ async function createAppointment(request, env, user) {
     const p = await env.DB.prepare('SELECT id, org_id, user_id FROM org_participants WHERE id = ?').bind(str(b.participant_id, 40)).first();
     const orgs = await orgsOfPsych(env, user);
     if (!p || (orgs !== null && !orgs.includes(p.org_id))) throw new HttpError(403, 'Peserta ini bukan dari organisasi Anda');
+    if (!(await canShare(env, p.user_id, p.org_id))) throw new HttpError(403, 'Peserta di bawah 18 tahun: persetujuan orang tua/wali belum dicatat oleh organisasi');
     userId = p.user_id;
     orgId = p.org_id;
     participantId = p.id;
   } else if (b.user_id) {
     const u = await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(str(b.user_id, 40)).first();
     if (!u) throw new HttpError(404, 'Pengguna tidak ditemukan');
+    if (!(await canShare(env, u.id))) throw new HttpError(403, 'Pengguna di bawah 18 tahun: persetujuan orang tua/wali belum dicatat');
     userId = u.id;
   }
   const title = str(b.title, 160) || (kind === 'assessment' ? 'Asesmen' : 'Konsultasi');
@@ -214,6 +217,7 @@ async function getClient(env, user, clientId) {
     }
   }
   if (!allowed) throw new HttpError(403, 'Anda belum memiliki sesi dengan pengguna ini');
+  if (!(await canShare(env, clientId))) throw new HttpError(403, 'Pengguna di bawah 18 tahun: persetujuan orang tua/wali belum dicatat');
   const u = await env.DB.prepare('SELECT id, name, email, created_at FROM users WHERE id = ?').bind(clientId).first();
   if (!u) throw new HttpError(404, 'Pengguna tidak ditemukan');
   const prof = await env.DB.prepare('SELECT segment, education_level, field, school, skills FROM profiles WHERE user_id = ?').bind(clientId).first();

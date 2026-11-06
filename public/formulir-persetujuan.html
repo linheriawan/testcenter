@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Formulir Persetujuan Orang Tua/Wali – Test Center</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    :root { color: #111; font-family: Arial, 'Helvetica Neue', sans-serif; }
+    body { margin: 0; background: #F4F6FA; }
+    .bar { max-width: 210mm; margin: 16px auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 16px; font-size: 14px; color: #5B6475; }
+    .bar button { height: 40px; padding: 0 18px; border-radius: 10px; border: 0; background: #3A3FD8; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
+    .paper { background: #fff; max-width: 210mm; margin: 0 auto 32px; padding: 16mm 18mm; box-sizing: border-box; font-size: 10.5pt; line-height: 1.5; border: 1px solid #E1E4EB; }
+    h1 { font-size: 14pt; text-align: center; margin: 0 0 2px; letter-spacing: 0.02em; }
+    .sub { text-align: center; font-size: 9.5pt; color: #444; margin: 0 0 14px; }
+    h2 { font-size: 10.5pt; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .row { display: grid; grid-template-columns: 170px 1fr; gap: 8px; padding: 4px 0; }
+    .line { border-bottom: 1px dotted #777; min-height: 18px; }
+    ul, ol { margin: 4px 0; padding-left: 20px; }
+    li { margin: 2px 0; }
+    .check { display: grid; grid-template-columns: 18px 1fr; gap: 8px; margin: 6px 0; }
+    .box { width: 12px; height: 12px; border: 1px solid #111; margin-top: 3px; }
+    .sign { display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px; margin-top: 22px; text-align: center; }
+    .sign .sp { height: 64px; }
+    .sign .nm { border-top: 1px solid #111; padding-top: 4px; }
+    .foot { margin-top: 18px; font-size: 8.5pt; color: #555; }
+    @media print {
+      @page { size: A4; margin: 0; }
+      body { background: #fff; }
+      .bar { display: none; }
+      .paper { border: 0; margin: 0; max-width: none; padding: 14mm 16mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bar"><span>Cetak formulir ini, minta orang tua/wali menandatanganinya, lalu catat di portal organisasi.</span><button type="button" onclick="window.print()">Cetak</button></div>
+  <article class="paper">
+    <h1>FORMULIR PERSETUJUAN ORANG TUA/WALI</h1>
+    <p class="sub">Pemrosesan data pribadi anak untuk asesmen psikologi melalui Test Center</p>
+
+    <h2>Data siswa</h2>
+    <div class="row"><span>Nama siswa</span><span class="line" id="nama"></span></div>
+    <div class="row"><span>Sekolah/organisasi</span><span class="line" id="org"></span></div>
+    <div class="row"><span>Kelas / NIS</span><span class="line"></span></div>
+
+    <h2>Data orang tua/wali</h2>
+    <div class="row"><span>Nama lengkap</span><span class="line"></span></div>
+    <div class="row"><span>Hubungan dengan siswa</span><span>Ibu / Ayah / Wali *</span></div>
+    <div class="row"><span>Nomor HP / email</span><span class="line"></span></div>
+
+    <h2>Yang kami minta persetujuannya</h2>
+    <p>Siswa akan mengerjakan tes psikologi online (tes kepribadian dan tes sikap kerja) melalui aplikasi Test Center. Data yang diproses: nama, email, tanggal lahir, jawaban tes, dan hasil tes.</p>
+    <ul>
+      <li><b>Tujuan:</b> bimbingan karier dan pemilihan jurusan bagi siswa.</li>
+      <li><b>Yang dapat melihat:</b> psikolog berlisensi melihat hasil tes lengkap; guru BK/sekolah melihat status tes dan laporan akhir dari psikolog.</li>
+      <li><b>Keamanan:</b> jawaban tes dan catatan psikolog disimpan terenkripsi. Data tidak dijual dan tidak dibagikan kepada pihak lain di luar tujuan di atas.</li>
+      <li><b>Penyimpanan:</b> selama program berlangsung, atau sampai orang tua/wali atau siswa meminta penghapusan.</li>
+    </ul>
+
+    <h2>Pernyataan</h2>
+    <div class="check"><span class="box"></span><span>Saya telah membaca dan memahami penjelasan di atas.</span></div>
+    <div class="check"><span class="box"></span><span>Saya menyetujui anak saya mengerjakan tes psikologi dan hasilnya dilihat oleh psikolog serta sekolah untuk tujuan di atas.</span></div>
+    <div class="check"><span class="box"></span><span>Saya menyetujui anak saya mengikuti sesi konsultasi online dengan psikolog bila diperlukan.</span></div>
+    <p>Saya memahami bahwa saya dapat <b>menarik persetujuan ini kapan saja</b> dengan memberi tahu sekolah, dan dapat meminta data anak saya dihapus.</p>
+
+    <div class="sign">
+      <div>Tempat, tanggal: ____________________<div class="sp"></div><div class="nm">Tanda tangan &amp; nama orang tua/wali</div></div>
+      <div>Diterima oleh sekolah,<div class="sp"></div><div class="nm">Nama &amp; tanda tangan petugas (guru BK)</div></div>
+    </div>
+    <p class="foot">* Coret yang tidak perlu. Formulir asli disimpan oleh sekolah. Persetujuan ini dicatat di portal Test Center oleh petugas sekolah. Teks formulir ini adalah contoh dan sebaiknya ditinjau oleh psikolog dan penasihat hukum sebelum digunakan.</p>
+  </article>
+  <script>
+    (function () {
+      var q = new URLSearchParams(location.search);
+      document.getElementById('nama').textContent = q.get('nama') || '';
+      document.getElementById('org').textContent = q.get('org') || '';
+    })();
+  </script>
+</body>
+</html>

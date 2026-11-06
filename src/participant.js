@@ -3,6 +3,7 @@
 import { HttpError, json, readJson, str, now } from './http.js';
 import { encryptJson, randomId } from './crypto.js';
 import { KRAEPELIN, scoreKraepelin } from '../public/shared/kraepelin.js';
+import { getBirthDate, setBirthDate, validBirthDate, isMinor } from './guardian.js';
 
 export const INVITE_TESTS = {
   kraepelin: 'Work attitude (Kraepelin)',
@@ -97,6 +98,7 @@ async function joinOrg(request, env, user) {
   const inv = await findInvite(env, body.code);
   if (!inv || !inv.active) throw new HttpError(404, 'This invite link is not valid or has been closed.');
   if (body.consent !== true) throw new HttpError(400, `Please agree to share your results with ${inv.org_name}.`);
+  if (!(await getBirthDate(env, user.id))) await setBirthDate(env, user.id, validBirthDate(body.birth_date));
   const ts = now();
   await env.DB.prepare(
     `INSERT INTO org_participants (id, org_id, invite_id, user_id, nik, position, division, consent_at, created_at)
@@ -108,7 +110,7 @@ async function joinOrg(request, env, user) {
   await env.DB.prepare("UPDATE org_invite_emails SET status = 'accepted', responded_at = ? WHERE invite_id = ? AND email = ?")
     .bind(ts, inv.id, String(user.email).toLowerCase())
     .run();
-  return json({ ok: true, org: inv.org_name }, 201);
+  return json({ ok: true, org: inv.org_name, needsGuardian: await isMinor(env, user.id) }, 201);
 }
 
 export async function myAssignments(env, user, done) {

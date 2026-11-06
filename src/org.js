@@ -12,6 +12,7 @@ import {
 import { suggestScores } from '../public/shared/suggest.js';
 import { latestResults } from './results.js';
 import { INVITE_TESTS } from './participant.js';
+import { isMinor, activeConsent, canShare, recordConsent, revokeConsent } from './guardian.js';
 
 const ROLE_RANK = { viewer: 1, assessor: 2, admin: 3 };
 const ROLES = Object.keys(ROLE_RANK);
@@ -354,6 +355,10 @@ async function createAssessment(request, env, user, orgId) {
     if (err instanceof HttpError) throw err;
     throw new HttpError(400, err.message);
   }
+  if (body.participant_id) {
+    const p = await env.DB.prepare('SELECT user_id FROM org_participants WHERE id = ? AND org_id = ?').bind(str(body.participant_id, 40), orgId).first();
+    if (p && !(await canShare(env, p.user_id, orgId))) throw new HttpError(403, 'Persetujuan orang tua/wali untuk peserta ini belum dicatat');
+  }
   const id = randomId();
   await (await insertStatement(env, orgId, user.id, rec, id)).run();
   if (body.participant_id) {
@@ -533,10 +538,17 @@ async function listParticipants(request, env, user, orgId) {
       .all();
     for (const r of res.results || []) (done[r.user_id] = done[r.user_id] || {})[r.test_id] = { completedAt: r.completedAt };
   }
+  const guardian = {};
+  for (const id of ids) {
+    const minor = await isMinor(env, id);
+    guardian[id] = { minor, consent: minor ? !!(await activeConsent(env, id, orgId)) : false };
+  }
   return json({
     participants: rows.map((r) => {
       const tests = JSON.parse(r.tests);
       return {
+        minor: guardian[r.user_id]?.minor || false,
+        guardian_consent: guardian[r.user_id]?.consent || false,
         id: r.id,
         invite_id: r.invite_id,
         invite_name: r.invite_name,
@@ -564,6 +576,8 @@ async function getParticipant(env, user, orgId, pid) {
     .first();
   if (!p) throw new HttpError(404, 'Peserta tidak ditemukan');
   const tests = JSON.parse(p.tests);
+  const minor = await isMinor(env, p.user_id);
+  const consent = minor ? await activeConsent(env, p.user_id, orgId) : null;
   const all = await latestResults(env, p.user_id);
   const status = testStatus(all, p.created_at, tests);
   const base = {
@@ -579,8 +593,11 @@ async function getParticipant(env, user, orgId, pid) {
     assessment_id: p.assessment_id,
     joined_at: p.created_at,
     consent_at: p.consent_at,
-    tests: status
+    tests: status,
+    minor,
+    guardian: consent
   };
+  if (minor && !consent) return json({ participant: base, restricted: true, reason: 'guardian' });
   // Raw psychological test results are for the psychologist and assessors, not HR viewers.
   if (ROLE_RANK[role] < ROLE_RANK.assessor) return json({ participant: base, restricted: true });
   const results = {};
@@ -733,7 +750,7 @@ export async function handleOrg(request, env, path, m, user) {
   if (path === '/api/org/mine' && m === 'GET') return myOrgs(env, user);
   if (path === '/api/admin/orgs' && m === 'POST') return createOrg(request, env, user);
 
-  const r = path.match(/^\/api\/org\/([0-9a-f-]{36})(?:\/([a-z]+)(?:\/([0-9a-f-]{36}|import)(?:\/(emails))?)?)?$/);
+  const r = path.match(/^\/api\/org\/([0-9a-f-]{36})(?:\/([a-z]+)(?:\/([0-9a-f-]{36}|import)(?:\/(emails|consent))?)?)?$/);
   if (!r) return null;
   const [, orgId, section, sub, extra] = r;
 
@@ -751,6 +768,17 @@ export async function handleOrg(request, env, path, m, user) {
     if (sub && m === 'PUT') return updateInvite(request, env, user, orgId, sub);
   }
   if (section === 'participants') {
+    if (sub && extra === 'consent') {
+      await orgAccess(env, user, orgId, 'assessor');
+      const p = await env.DB.prepare('SELECT user_id FROM org_participants WHERE id = ? AND org_id = ?').bind(sub, orgId).first();
+      if (!p) throw new HttpError(404, 'Peserta tidak ditemukan');
+      if (m === 'POST') return recordConsent(request, env, user, orgId, p);
+      if (m === 'DELETE') {
+        await orgAccess(env, user, orgId, 'admin');
+        return revokeConsent(env, user, orgId, p);
+      }
+    }
+    if (extra) return null;
     if (!sub && m === 'GET') return listParticipants(request, env, user, orgId);
     if (sub && m === 'GET') return getParticipant(env, user, orgId, sub);
     if (sub && m === 'PUT') return updateParticipant(request, env, user, orgId, sub);

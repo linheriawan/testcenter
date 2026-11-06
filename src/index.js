@@ -8,6 +8,7 @@ import { handlePsych } from './psych.js';
 import { handleAdmin } from './admin.js';
 import { isPlatformAdmin } from './org.js';
 import { deleteUserData } from './userdata.js';
+import { validBirthDate, setBirthDate, getBirthDate, consentSummary, saveMyBirthDate } from './guardian.js';
 import { TESTS, COMING_SOON, publicTest, validateAnswers } from './tests.js';
 import {
   hashPassword,
@@ -85,6 +86,7 @@ async function register(request, env) {
   if (!EMAIL_RE.test(email)) throw new HttpError(400, 'Please enter a valid email');
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters');
   if (body.consent !== true) throw new HttpError(400, 'Please agree to the Terms and Privacy Policy');
+  const birthDate = validBirthDate(body.birth_date);
 
   const exists = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
   if (exists) throw new HttpError(409, 'An account with this email already exists');
@@ -96,6 +98,7 @@ async function register(request, env) {
   )
     .bind(id, email, name, phone ? await encryptText(phone, env.ENCRYPTION_KEY) : null, await hashPassword(password), 'user', ts, ts)
     .run();
+  await setBirthDate(env, id, birthDate);
 
   const token = await signJwt({ sub: id }, env.JWT_SECRET, SESSION_TTL);
   return json({ user: { id, email, name, role: 'user' } }, 201, { 'set-cookie': sessionCookie(token, SESSION_TTL) });
@@ -126,6 +129,8 @@ async function me(request, env) {
   const profile = await env.DB.prepare('SELECT segment FROM profiles WHERE user_id = ?').bind(user.id).first();
   return json({
     user,
+    birthDate: await getBirthDate(env, user.id),
+    ...(await consentSummary(env, user.id)),
     hasProfile: !!(profile && profile.segment),
     hasOrg: await userHasOrg(env, user),
     isAdmin: isPlatformAdmin(env, user),
@@ -456,6 +461,7 @@ async function handleApi(request, env) {
   if (path === '/api/auth/logout' && m === 'POST') return logout();
   if (path === '/api/me' && m === 'GET') return me(request, env);
   if (path === '/api/me' && m === 'DELETE') return deleteAccount(request, env);
+  if (path === '/api/me/birthdate' && m === 'PUT') return saveMyBirthDate(request, env, await requireUser(request, env));
   if (path === '/api/profile' && m === 'GET') return getProfile(request, env);
   if (path === '/api/profile' && m === 'PUT') return saveProfile(request, env);
   if (path === '/api/tests' && m === 'GET') return listTests(request, env);

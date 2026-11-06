@@ -26,6 +26,14 @@ location), and can keep private encrypted notes. Psychologists can also schedule
 (interviews, LGD) for employees of organizations they belong to. A psychologist can see test results
 only for their own clients or for participants in their organizations. All times are WIB.
 
+**Users under 18 (parental consent):** registration asks for date of birth (existing accounts are asked
+once on the home screen, and when joining an organization). Under-18 users can take the free tests and see
+their own results. Sharing results with an organization, being scheduled by a psychologist, and booking a
+consultation are blocked until a guardian's consent is recorded. Schools record it in the portal on the
+participant's page after receiving a signed paper form (printable at `/formulir-persetujuan.html`); the
+record keeps guardian name, relationship, form date, who recorded it and when. Admins can withdraw it.
+Consent is per organization and stored in `guardian_consents` (UU PDP Art. 25).
+
 **Invitations by email:** in the portal's *Undangan & Tes*, assessors can invite app users by email.
 Registered users see the invitation on their home screen; others see it once they register with that
 email. No email is sent by the app yet, so share the invite link by email or WhatsApp too.
@@ -167,6 +175,8 @@ npm run dev
 | POST | `/api/join` | join an organization with consent |
 | POST | `/api/kraepelin/start`, `/api/kraepelin/submit` | Kraepelin session and scoring |
 | GET / POST | `/api/org/:id/invites/:iid/emails` | invite app users by email |
+| POST / DELETE | `/api/org/:id/participants/:pid/consent` | record or withdraw a guardian's paper consent |
+| PUT | `/api/me/birthdate` | set date of birth once (existing accounts) |
 | GET | `/api/invitations`; POST `/api/invitations/:id/decline` | a user's pending invitations |
 | GET | `/api/psychologists`, `/api/slots?psychologist=&days=` | psychologists and free slots |
 | GET / POST | `/api/bookings`; POST `/api/bookings/:id/cancel` | a user's sessions |
