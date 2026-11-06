@@ -6,6 +6,39 @@ Runs as a single Cloudflare Worker: static frontend (`public/`) plus the API (`s
 
 - `/` — public front page in Bahasa Indonesia (`public/index.html`), with the partnership inquiry form
 - `/app/` — the assessment app (`public/app/index.html`, `public/app.js`)
+- `/org/` — corporate portal in Bahasa Indonesia (`public/org/index.html`, `public/org.js`)
+
+## Corporate module (Portal Organisasi)
+
+Talent assessment for companies, following the assessment-center method: a psychologist scores
+each participant 1–5 (KS, K, C, B, BS) on 18 psychological aspects, which are compared with the
+required score for the participant's job level (standar jabatan).
+
+- **gap / match / talent** = aspects below / equal to / above the standard
+- **Fit:** gap 0–2 Fit in Position, 3–5 Moderate Fit, 6+ Low Fit
+- **Potential:** talent 7+ Ready, 4–6 Potential, 0–3 Develop
+- Fit × Potential gives the **9-box** position and the recommendation (Disarankan, Dipertimbangkan,
+  Dipertimbangkan dengan Catatan, Tidak Disarankan). The psychologist can override the final recommendation.
+
+The rules live in `public/shared/talent.js`, used by both the API and the browser.
+
+Features: dashboard (9-box, recommendations, fit, development needs per aspect, per level and division),
+participant list with filters and CSV export, CSV import with a template (comma or semicolon),
+assessment form with live scoring, printable psikogram (A4 PDF via the browser), editable job standards,
+signature settings, and team members with roles:
+
+| Role | Can |
+| --- | --- |
+| `admin` | everything, including members, standards and deleting data |
+| `assessor` | add, import and edit assessments |
+| `viewer` | read the dashboard and psikogram (HR) |
+
+**Platform admins** can create organizations and generate demo data. Set the secret
+`ADMIN_EMAILS` (comma-separated) in the Worker's Variables and Secrets. Each admin needs an
+account in the app with the same email. New organizations start with 4 made-up example standards
+(L1–L4) to edit.
+
+Narrative fields (strengths, development areas, conclusion, notes) are encrypted in D1.
 
 ## Reading partnership inquiries
 
@@ -76,6 +109,15 @@ npm run dev
 | POST | `/api/insights` | generate AI matches |
 | GET / POST | `/api/bookings` | consultation requests |
 | POST | `/api/inquiries` | partnership inquiry from the front page (no login) |
+| GET | `/api/org/mine` | organizations the user belongs to |
+| POST | `/api/admin/orgs` | create organization (platform admin) |
+| GET / PUT | `/api/org/:id`, `/api/org/:id/settings` | organization and signature settings |
+| GET / POST / DELETE | `/api/org/:id/members[/:userId]` | team members |
+| GET / POST / PUT / DELETE | `/api/org/:id/standards[/:sid]` | job standards |
+| GET / POST / PUT / DELETE | `/api/org/:id/assessments[/:aid]` | assessments (list supports filters) |
+| POST | `/api/org/:id/assessments/import` | CSV import, up to 500 rows |
+| GET | `/api/org/:id/dashboard` | aggregates for the dashboard |
+| POST | `/api/org/:id/demo` | 120 demo participants (platform admin) |
 
 ## Next steps
 

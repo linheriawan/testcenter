@@ -1,4 +1,6 @@
 import { SCHEMA } from './schema.js';
+import { HttpError, json, readJson, str, now } from './http.js';
+import { handleOrg, userHasOrg } from './org.js';
 import { TESTS, COMING_SOON, publicTest, validateAnswers } from './tests.js';
 import {
   hashPassword,
@@ -16,39 +18,6 @@ const SESSION_TTL = 60 * 60 * 24 * 7; // 7 days
 const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 
 // ---------------- helpers ----------------
-
-class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
-function json(data, status = 200, headers = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }
-  });
-}
-
-async function readJson(request) {
-  const len = Number(request.headers.get('content-length') || 0);
-  if (len > 200_000) throw new HttpError(413, 'Request is too large');
-  try {
-    return await request.json();
-  } catch {
-    throw new HttpError(400, 'Invalid JSON body');
-  }
-}
-
-function str(v, max = 200) {
-  if (v === null || v === undefined) return '';
-  return String(v).trim().slice(0, max);
-}
-
-function now() {
-  return new Date().toISOString();
-}
 
 function getCookie(request, name) {
   const header = request.headers.get('cookie') || '';
@@ -148,7 +117,7 @@ async function me(request, env) {
   const user = await currentUser(request, env);
   if (!user) return json({ user: null });
   const profile = await env.DB.prepare('SELECT segment FROM profiles WHERE user_id = ?').bind(user.id).first();
-  return json({ user, hasProfile: !!(profile && profile.segment) });
+  return json({ user, hasProfile: !!(profile && profile.segment), hasOrg: await userHasOrg(env, user) });
 }
 
 async function deleteAccount(request, env) {
@@ -488,6 +457,11 @@ async function handleApi(request, env) {
   await ensureSchema(env);
 
   if (path === '/api/health') return json({ ok: true });
+  if (path.startsWith('/api/org/') || path.startsWith('/api/admin/')) {
+    const res = await handleOrg(request, env, path, m, await requireUser(request, env));
+    if (res) return res;
+    throw new HttpError(404, 'Not found');
+  }
   if (path === '/api/auth/register' && m === 'POST') return register(request, env);
   if (path === '/api/auth/login' && m === 'POST') return login(request, env);
   if (path === '/api/auth/logout' && m === 'POST') return logout();

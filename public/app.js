@@ -31,6 +31,22 @@ async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// After logging in from the organization portal, send the user back there.
+function goNext() {
+  let next = null;
+  try {
+    next = sessionStorage.getItem('tc_next');
+    sessionStorage.removeItem('tc_next');
+  } catch {
+    next = null;
+  }
+  if (next && next.startsWith('/org/')) {
+    location.href = next;
+    return true;
+  }
+  return false;
+}
+
 function go(hash) {
   if (location.hash === hash) render();
   else location.hash = hash;
@@ -133,6 +149,7 @@ function viewRegister() {
       });
       state.user = d.user;
       state.hasProfile = false;
+      if (goNext()) return;
       go('#/profile');
     } catch (err) {
       showError(document.getElementById('err'), err.message);
@@ -167,6 +184,8 @@ function viewLogin() {
       state.user = d.user;
       const m = await api('/api/me');
       state.hasProfile = m.hasProfile;
+      state.hasOrg = !!m.hasOrg;
+      if (goNext()) return;
       go(state.hasProfile ? '#/home' : '#/profile');
     } catch (err) {
       showError(document.getElementById('err'), err.message);
@@ -763,6 +782,7 @@ function viewAccount() {
     <div class="card"><b style="font-size:16px">${esc(state.user.name)}</b><span class="small">${esc(state.user.email)}</span></div>
     <div class="card" style="gap:0;padding:6px 18px">
       <a href="#/profile" style="padding:14px 0;text-decoration:none;font-weight:700">Edit profile &amp; CV</a>
+      ${state.hasOrg ? '<a href="/org/" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Organization portal</a>' : ''}
       <button type="button" class="link-btn" id="logout" style="padding:14px 0;text-align:left;border-top:1px solid #EEF0F4">Log out</button>
       <button type="button" class="link-btn danger" id="del" style="padding:14px 0;text-align:left;border-top:1px solid #EEF0F4">Delete my account and data</button>
     </div>
@@ -823,6 +843,7 @@ async function start() {
     const m = await api('/api/me');
     state.user = m.user;
     state.hasProfile = !!m.hasProfile;
+    state.hasOrg = !!m.hasOrg;
   } catch (err) {
     app.innerHTML = `<section class="screen"><div class="error" role="alert">${esc(err.message)}</div></section>`;
     return;
