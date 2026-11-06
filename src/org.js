@@ -9,6 +9,9 @@ import {
   evaluate,
   isValidScores
 } from '../public/shared/talent.js';
+import { suggestScores } from '../public/shared/suggest.js';
+import { latestResults } from './results.js';
+import { INVITE_TESTS } from './participant.js';
 
 const ROLE_RANK = { viewer: 1, assessor: 2, admin: 3 };
 const ROLES = Object.keys(ROLE_RANK);
@@ -330,22 +333,32 @@ async function getAssessment(env, user, orgId, id) {
   if (!r) throw new HttpError(404, 'Data asesmen tidak ditemukan');
   const narrative = (await decryptJson(r.narrative_enc, env.ENCRYPTION_KEY)) || {};
   const { narrative_enc, ...rest } = r;
+  let kraepelin = null;
+  const link = await env.DB.prepare('SELECT user_id FROM org_participants WHERE assessment_id = ? AND org_id = ?').bind(id, orgId).first();
+  if (link) {
+    const k = (await latestResults(env, link.user_id)).kraepelin;
+    if (k) kraepelin = { speed: k.speed, errorRate: k.errorRate, variation: k.variation, endurance: k.endurance, levels: k.levels, completedAt: k.completedAt };
+  }
   return json({
-    assessment: { ...rest, ...narrative, scores: JSON.parse(r.scores), standard_scores: JSON.parse(r.standard_scores) }
+    assessment: { ...rest, ...narrative, scores: JSON.parse(r.scores), standard_scores: JSON.parse(r.standard_scores), kraepelin }
   });
 }
 
 async function createAssessment(request, env, user, orgId) {
   await orgAccess(env, user, orgId, 'assessor');
   let rec;
+  const body = await readJson(request);
   try {
-    rec = normalizeAssessment(await readJson(request), await standardsMap(env, orgId));
+    rec = normalizeAssessment(body, await standardsMap(env, orgId));
   } catch (err) {
     if (err instanceof HttpError) throw err;
     throw new HttpError(400, err.message);
   }
   const id = randomId();
   await (await insertStatement(env, orgId, user.id, rec, id)).run();
+  if (body.participant_id) {
+    await env.DB.prepare('UPDATE org_participants SET assessment_id = ? WHERE id = ? AND org_id = ?').bind(id, str(body.participant_id, 40), orgId).run();
+  }
   return json({ id }, 201);
 }
 
@@ -394,6 +407,141 @@ async function importAssessments(request, env, user, orgId) {
   if (errors.length && !body.skipInvalid) return json({ created: 0, errors }, 400);
   for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
   return json({ created: stmts.length, errors });
+}
+
+// ---------------- invites & participants ----------------
+
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function newCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return [...bytes].map((b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
+}
+
+async function listInvites(env, user, orgId) {
+  await orgAccess(env, user, orgId, 'viewer');
+  const { results } = await env.DB.prepare(
+    `SELECT i.*, (SELECT COUNT(*) FROM org_participants p WHERE p.invite_id = i.id) AS joined
+     FROM org_invites i WHERE i.org_id = ? ORDER BY i.created_at DESC`
+  )
+    .bind(orgId)
+    .all();
+  return json({ invites: (results || []).map((i) => ({ ...i, tests: JSON.parse(i.tests), active: !!i.active })) });
+}
+
+async function createInvite(request, env, user, orgId) {
+  await orgAccess(env, user, orgId, 'assessor');
+  const body = await readJson(request);
+  const name = str(body.name, 120);
+  if (!name) throw new HttpError(400, 'Nama gelombang asesmen wajib diisi');
+  const tests = (Array.isArray(body.tests) ? body.tests : []).filter((t) => INVITE_TESTS[t]);
+  if (!tests.length) throw new HttpError(400, 'Pilih minimal satu tes');
+  const id = randomId();
+  let code = newCode();
+  for (let i = 0; i < 3; i++) {
+    const dup = await env.DB.prepare('SELECT 1 AS x FROM org_invites WHERE code = ?').bind(code).first();
+    if (!dup) break;
+    code = newCode();
+  }
+  await env.DB.prepare(
+    'INSERT INTO org_invites (id, org_id, code, name, standard_code, purpose, tests, active, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
+  )
+    .bind(id, orgId, code, name, str(body.standard_code, 30).toUpperCase(), str(body.purpose, 120), JSON.stringify(tests), user.id, now())
+    .run();
+  return json({ id, code }, 201);
+}
+
+async function updateInvite(request, env, user, orgId, inviteId) {
+  await orgAccess(env, user, orgId, 'assessor');
+  const body = await readJson(request);
+  await env.DB.prepare('UPDATE org_invites SET active = ? WHERE id = ? AND org_id = ?').bind(body.active ? 1 : 0, inviteId, orgId).run();
+  return json({ ok: true });
+}
+
+function testStatus(done, joinedAt, tests) {
+  const out = {};
+  for (const t of tests) out[t] = done[t] && done[t].completedAt >= joinedAt ? done[t].completedAt : null;
+  return out;
+}
+
+async function listParticipants(request, env, user, orgId) {
+  await orgAccess(env, user, orgId, 'viewer');
+  const url = new URL(request.url);
+  const inviteId = url.searchParams.get('invite');
+  const { results } = await env.DB.prepare(
+    `SELECT p.id, p.invite_id, p.user_id, p.nik, p.position, p.division, p.assessment_id, p.created_at,
+            u.name, u.email, i.tests, i.name AS invite_name
+     FROM org_participants p JOIN users u ON u.id = p.user_id JOIN org_invites i ON i.id = p.invite_id
+     WHERE p.org_id = ? ${inviteId ? 'AND p.invite_id = ?' : ''} ORDER BY p.created_at DESC LIMIT 2000`
+  )
+    .bind(...(inviteId ? [orgId, inviteId] : [orgId]))
+    .all();
+  const rows = results || [];
+  // One query for all completed tests of these users.
+  const ids = [...new Set(rows.map((r) => r.user_id))];
+  const done = {};
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    const res = await env.DB.prepare(
+      `SELECT user_id, test_id, MAX(created_at) AS completedAt FROM test_results WHERE user_id IN (${chunk.map(() => '?').join(',')}) GROUP BY user_id, test_id`
+    )
+      .bind(...chunk)
+      .all();
+    for (const r of res.results || []) (done[r.user_id] = done[r.user_id] || {})[r.test_id] = { completedAt: r.completedAt };
+  }
+  return json({
+    participants: rows.map((r) => {
+      const tests = JSON.parse(r.tests);
+      return {
+        id: r.id,
+        invite_id: r.invite_id,
+        invite_name: r.invite_name,
+        name: r.name,
+        email: r.email,
+        nik: r.nik,
+        position: r.position,
+        division: r.division,
+        assessment_id: r.assessment_id,
+        joined_at: r.created_at,
+        tests: testStatus(done[r.user_id] || {}, r.created_at, tests)
+      };
+    })
+  });
+}
+
+async function getParticipant(env, user, orgId, pid) {
+  const { role } = await orgAccess(env, user, orgId, 'viewer');
+  const p = await env.DB.prepare(
+    `SELECT p.*, u.name, u.email, i.tests, i.name AS invite_name, i.standard_code, i.purpose
+     FROM org_participants p JOIN users u ON u.id = p.user_id JOIN org_invites i ON i.id = p.invite_id
+     WHERE p.id = ? AND p.org_id = ?`
+  )
+    .bind(pid, orgId)
+    .first();
+  if (!p) throw new HttpError(404, 'Peserta tidak ditemukan');
+  const tests = JSON.parse(p.tests);
+  const all = await latestResults(env, p.user_id);
+  const status = testStatus(all, p.created_at, tests);
+  const base = {
+    id: p.id,
+    name: p.name,
+    email: p.email,
+    nik: p.nik,
+    position: p.position,
+    division: p.division,
+    invite_name: p.invite_name,
+    standard_code: p.standard_code,
+    purpose: p.purpose,
+    assessment_id: p.assessment_id,
+    joined_at: p.created_at,
+    consent_at: p.consent_at,
+    tests: status
+  };
+  // Raw psychological test results are for the psychologist and assessors, not HR viewers.
+  if (ROLE_RANK[role] < ROLE_RANK.assessor) return json({ participant: base, restricted: true });
+  const results = {};
+  for (const t of tests) if (status[t]) results[t] = all[t];
+  return json({ participant: { ...base, results, suggestions: suggestScores(results) } });
 }
 
 // ---------------- dashboard ----------------
@@ -532,6 +680,15 @@ export async function handleOrg(request, env, path, m, user) {
   if (section === 'dashboard' && m === 'GET') return dashboard(request, env, user, orgId);
   if (section === 'demo' && m === 'POST') return seedDemo(env, user, orgId);
 
+  if (section === 'invites') {
+    if (!sub && m === 'GET') return listInvites(env, user, orgId);
+    if (!sub && m === 'POST') return createInvite(request, env, user, orgId);
+    if (sub && m === 'PUT') return updateInvite(request, env, user, orgId, sub);
+  }
+  if (section === 'participants') {
+    if (!sub && m === 'GET') return listParticipants(request, env, user, orgId);
+    if (sub && m === 'GET') return getParticipant(env, user, orgId, sub);
+  }
   if (section === 'members') {
     if (!sub && m === 'GET') return listMembers(env, user, orgId);
     if (!sub && m === 'POST') return addMember(request, env, user, orgId);

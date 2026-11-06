@@ -1,6 +1,8 @@
 import { SCHEMA } from './schema.js';
 import { HttpError, json, readJson, str, now } from './http.js';
 import { handleOrg, userHasOrg } from './org.js';
+import { latestResults } from './results.js';
+import { handleParticipant, myAssignments } from './participant.js';
 import { TESTS, COMING_SOON, publicTest, validateAnswers } from './tests.js';
 import {
   hashPassword,
@@ -209,18 +211,6 @@ async function saveProfile(request, env) {
 
 // ---------------- tests ----------------
 
-async function latestResults(env, userId) {
-  const { results } = await env.DB.prepare(
-    `SELECT test_id, result, created_at FROM test_results t
-     WHERE user_id = ? AND created_at = (SELECT MAX(created_at) FROM test_results WHERE user_id = t.user_id AND test_id = t.test_id)`
-  )
-    .bind(userId)
-    .all();
-  const out = {};
-  for (const r of results || []) out[r.test_id] = { ...JSON.parse(r.result), completedAt: r.created_at };
-  return out;
-}
-
 async function listTests(request, env) {
   const user = await requireUser(request, env);
   const done = await latestResults(env, user.id);
@@ -232,8 +222,19 @@ async function listTests(request, env) {
     count: t.questions.length,
     status: done[t.id] ? 'done' : 'todo'
   }));
+  tests.push({
+    id: 'kraepelin',
+    code: 'KR',
+    name: 'Work attitude (Kraepelin)',
+    minutes: 12,
+    count: null,
+    status: done.kraepelin ? 'done' : 'todo'
+  });
+  const assignments = await myAssignments(env, user, done);
+  const required = new Set(assignments.flatMap((a) => a.tests.filter((t) => !t.done).map((t) => t.id)));
+  for (const t of tests) t.required = required.has(t.id);
   const soon = COMING_SOON.map((t) => ({ ...t, status: 'soon' }));
-  return json({ tests: [...tests, ...soon] });
+  return json({ tests: [...tests, ...soon], assignments });
 }
 
 async function getTest(request, env, id) {
@@ -457,6 +458,10 @@ async function handleApi(request, env) {
   await ensureSchema(env);
 
   if (path === '/api/health') return json({ ok: true });
+  {
+    const res = await handleParticipant(request, env, path, m, () => requireUser(request, env));
+    if (res) return res;
+  }
   if (path.startsWith('/api/org/') || path.startsWith('/api/admin/')) {
     const res = await handleOrg(request, env, path, m, await requireUser(request, env));
     if (res) return res;

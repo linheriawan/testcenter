@@ -40,6 +40,28 @@ account in the app with the same email. New organizations start with 4 made-up e
 
 Narrative fields (strengths, development areas, conclusion, notes) are encrypted in D1.
 
+### Online psikotes via invite links
+
+In **Undangan & Tes**, an assessor creates an invite for an assessment round (name, default job
+standard, purpose, tests). Employees open the link (`/app/#/join/CODE`), create an account, consent to
+share results with the organization, and take the required tests in the app.
+
+- **Kraepelin** (`public/shared/kraepelin.js`): 40 columns × 15 seconds; add adjacent digits and enter the
+  last digit of the sum. Digits come from a server-issued seed, answers and timing are checked on the
+  server, and tab switches are recorded. Scored as speed, accuracy (error %), consistency (variation)
+  and endurance (last third ÷ first third), each converted to 1–5 with **provisional norms** (`NORMS`)
+  that the psychologist should adjust once real data is available.
+- **Big Five** and **16-type** from the participant app.
+
+Assessors see each participant's results and **suggested** scores for 14 of the 18 aspects
+(`public/shared/suggest.js`); the 4 cognitive aspects still need the psychologist (no online
+cognitive test yet). "Buat asesmen dari hasil ini" opens the assessment form prefilled with those
+suggestions, and the psikogram then includes the Kraepelin results. HR viewers only see test status,
+not raw psychological results. Only tests completed after joining an invite count.
+
+For local testing, `KRAEPELIN_TEST=1` in `.dev.vars` shortens the test to 3 columns × 5 seconds.
+Never set it in production.
+
 ## Reading partnership inquiries
 
 Until there is an admin dashboard, open D1 → `testcenter-db` → Console in the Cloudflare dashboard and run:
@@ -118,6 +140,11 @@ npm run dev
 | POST | `/api/org/:id/assessments/import` | CSV import, up to 500 rows |
 | GET | `/api/org/:id/dashboard` | aggregates for the dashboard |
 | POST | `/api/org/:id/demo` | 120 demo participants (platform admin) |
+| GET / POST / PUT | `/api/org/:id/invites[/:iid]` | invite links (PUT toggles active) |
+| GET | `/api/org/:id/participants[/:pid]` | employees who joined, with test status, results and suggestions |
+| GET | `/api/join/:code` | public invite info |
+| POST | `/api/join` | join an organization with consent |
+| POST | `/api/kraepelin/start`, `/api/kraepelin/submit` | Kraepelin session and scoring |
 
 ## Next steps
 

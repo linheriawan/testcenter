@@ -1,5 +1,7 @@
 // Test Center — single-page app (vanilla JS, hash routing).
 
+import { columnDigits, expected } from '/shared/kraepelin.js';
+
 const app = document.getElementById('app');
 const state = { user: null, hasProfile: false };
 
@@ -42,6 +44,10 @@ function goNext() {
   }
   if (next && next.startsWith('/org/')) {
     location.href = next;
+    return true;
+  }
+  if (next && /^#\/join\/[A-Z0-9]+$/.test(next)) {
+    go(next);
     return true;
   }
   return false;
@@ -399,6 +405,7 @@ async function viewProfile() {
 // ---------------- home ----------------
 
 const TEST_COLORS = {
+  kraepelin: ['#FFF3E6', '#9A3412'],
   bigfive: ['#DDF3EE', '#0B5E52'],
   type16: ['#E7E8FB', '#272BA8'],
   riasec: ['#FDEBD8', '#9A3412'],
@@ -407,8 +414,8 @@ const TEST_COLORS = {
 
 async function viewHome() {
   loading();
-  const { tests } = await api('/api/tests');
-  const core = tests.filter((t) => t.status !== 'soon');
+  const { tests, assignments } = await api('/api/tests');
+  const core = tests.filter((t) => t.status !== 'soon' && t.id !== 'kraepelin');
   const done = core.filter((t) => t.status === 'done').length;
   const first = (state.user?.name || '').split(' ')[0];
   app.className = 'app tinted';
@@ -422,6 +429,17 @@ async function viewHome() {
         ? ''
         : `<a class="card" href="#/profile" style="text-decoration:none;color:inherit"><b>Complete your profile</b><span class="small">Add your education and CV details so your matches fit you.</span></a>`
     }
+    ${(assignments || [])
+      .map((a) => {
+        const left = a.tests.filter((t) => !t.done);
+        return `<div class="card" style="border-color:${left.length ? '#F5C89B' : 'var(--line)'}">
+          <span class="eyebrow" style="color:var(--warm)">Assessment from ${esc(a.org)}</span>
+          <b style="font-size:16px">${esc(a.name)}</b>
+          <ul class="plain">${a.tests.map((t) => `<li>${esc(t.name)}: ${t.done ? '<b style="color:var(--ok)">done</b>' : '<b>to do</b>'}</li>`).join('')}</ul>
+          <span class="small">${left.length ? 'Please complete the tests marked "Required" below. Your results are shared with the organization and its psychologist.' : 'All done. Thank you! The psychologist will review your results.'}</span>
+        </div>`;
+      })
+      .join('')}
     <div class="card-dark">
       <span class="eyebrow">Your career report</span>
       <span style="font-size:17px;font-weight:700;line-height:1.35">${
@@ -438,13 +456,19 @@ async function viewHome() {
       ${tests
         .map((t) => {
           const [bg, fg] = TEST_COLORS[t.id] || TEST_COLORS.values;
-          const badge =
-            t.status === 'done'
+          const badge = t.required
+            ? '<span class="badge" style="background:var(--warm);color:#FFFFFF">Required</span>'
+            : t.status === 'done'
               ? '<span class="badge badge-done">Done</span>'
               : t.status === 'soon'
                 ? '<span class="badge badge-soon">Soon</span>'
                 : '<span class="badge badge-start">Start</span>';
-          const meta = t.status === 'soon' ? `Coming soon · ~${t.minutes} min` : `${t.count} questions · ~${t.minutes} min`;
+          const meta =
+            t.status === 'soon'
+              ? `Coming soon · ~${t.minutes} min`
+              : t.id === 'kraepelin'
+                ? `Timed number test · ~${t.minutes} min`
+                : `${t.count} questions · ~${t.minutes} min`;
           const inner = `<span class="test-icon" style="background:${bg};color:${fg}">${esc(t.code)}</span>
             <span style="flex:1;display:flex;flex-direction:column;gap:3px;min-width:0">
               <span style="font-size:15px;font-weight:700">${esc(t.name)}</span>
@@ -452,7 +476,7 @@ async function viewHome() {
             </span>${badge}`;
           return t.status === 'soon'
             ? `<div class="test-item soon">${inner}</div>`
-            : `<a class="test-item" href="#/test/${t.id}" ${t.status === 'done' ? `aria-label="${esc(t.name)}, done. Retake test"` : ''}>${inner}</a>`;
+            : `<a class="test-item" href="${t.id === 'kraepelin' ? '#/kraepelin' : `#/test/${t.id}`}" ${t.status === 'done' ? `aria-label="${esc(t.name)}, done. Retake test"` : ''}>${inner}</a>`;
         })
         .join('')}
     </div>
@@ -606,11 +630,11 @@ async function viewResults() {
   let insights = data.insights;
   let busy = false;
   let error = '';
-  const { type16, bigfive } = data.results;
+  const { type16, bigfive, kraepelin } = data.results;
 
   const draw = () => {
     app.className = 'app tinted';
-    if (!type16 && !bigfive) {
+    if (!type16 && !bigfive && !kraepelin) {
       app.innerHTML = `<section class="screen with-nav">
         <h1 class="h1" style="font-size:24px">Your results</h1>
         <div class="card"><b>No results yet</b><p class="small">Finish a test and your results will show up here.</p><a class="btn btn-primary" href="#/home">Go to tests</a></div>
@@ -654,6 +678,7 @@ async function viewResults() {
         </div>`
           : `<a class="card" href="#/test/bigfive" style="text-decoration:none;color:inherit"><b>Big Five personality</b><span class="small">Not taken yet. Take it for better matches.</span></a>`
       }
+      ${kraepelinCard(data.results.kraepelin)}
       ${matchesBlock(insights, busy, error)}
       <div class="card-dark">
         <div class="row" style="gap:8px">${icon('lock', 18, '#C9CCF7')}<span class="eyebrow">Full report</span></div>
@@ -805,11 +830,290 @@ function viewAccount() {
   });
 }
 
+// ---------------- joining an organization (invite link) ----------------
+
+async function viewJoin(code) {
+  loading();
+  const { invite } = await api(`/api/join/${code}`);
+  app.className = 'app';
+  const head = `<a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">${icon('compass', 20, '#FFFFFF')}</span>Test Center</a>
+    <div class="stack-sm">
+      <span class="eyebrow" style="color:var(--warm)">Invitation from ${esc(invite.org)}</span>
+      <h1 class="h1" style="font-size:24px">${esc(invite.name)}</h1>
+      <p class="lead" style="font-size:14.5px">${esc(invite.org)} has invited you to take the following online tests:</p>
+      <ul class="plain">${invite.tests.map((t) => `<li>${esc(t.name)}</li>`).join('')}</ul>
+    </div>`;
+  if (!state.user) {
+    try {
+      sessionStorage.setItem('tc_next', `#/join/${code}`);
+    } catch {
+      /* ignore */
+    }
+    app.innerHTML = `<section class="screen">${head}
+      <p class="small">Create an account (or log in) to continue. Use your own email; your results stay linked to your account.</p>
+      <div class="stack-sm push">
+        <a class="btn btn-primary" href="#/register">Create account</a>
+        <a class="btn btn-outline" href="#/login">I already have an account</a>
+      </div>
+    </section>`;
+    return;
+  }
+  app.innerHTML = `<section class="screen">${head}
+    <form id="jf" class="stack" novalidate>
+      <div class="field"><label for="nik">Employee ID (NIK) <span class="small">(optional)</span></label><input class="input" id="nik" maxlength="40"></div>
+      <div class="field"><label for="pos">Current position <span class="small">(optional)</span></label><input class="input" id="pos" maxlength="160"></div>
+      <div class="field"><label for="div">Division <span class="small">(optional)</span></label><input class="input" id="div" maxlength="120"></div>
+      <div class="check"><input id="consent" type="checkbox"><label for="consent">I agree that my results from these tests are shared with ${esc(invite.org)} and its psychologist for this assessment. I can ask for my data to be deleted at any time.</label></div>
+      <div id="err"></div>
+      <button class="btn btn-primary" type="submit">Join and start</button>
+    </form>
+    <p class="small center">Logged in as ${esc(state.user.email)}</p>
+  </section>`;
+  document.getElementById('jf').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      await api('/api/join', {
+        method: 'POST',
+        body: {
+          code,
+          nik: document.getElementById('nik').value,
+          position: document.getElementById('pos').value,
+          division: document.getElementById('div').value,
+          consent: document.getElementById('consent').checked
+        }
+      });
+      go('#/home');
+    } catch (err) {
+      showError(document.getElementById('err'), err.message);
+      btn.disabled = false;
+    }
+  });
+}
+
+// ---------------- Kraepelin test ----------------
+
+const LEVEL_WORDS = ['', 'Very low', 'Low', 'Average', 'High', 'Very high'];
+const KR_INDEX_EN = { speed: 'Speed', accuracy: 'Accuracy', consistency: 'Consistency', endurance: 'Endurance' };
+
+function sparkline(values, w = 300, h = 60) {
+  if (!values || values.length < 2) return '';
+  const max = Math.max(...values, 1);
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - (v / max) * (h - 6) - 3).toFixed(1)}`).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Answers per column over time"><polyline points="${pts}" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linejoin="round"></polyline></svg>`;
+}
+
+function kraepelinCard(k) {
+  if (!k) {
+    return `<a class="card" href="#/kraepelin" style="text-decoration:none;color:inherit"><b>Work attitude (Kraepelin)</b><span class="small">Not taken yet. A 10-minute timed number test of speed, accuracy and endurance.</span></a>`;
+  }
+  return `<div class="card">
+    <h2 class="h2">Work attitude (Kraepelin)</h2>
+    ${['speed', 'accuracy', 'consistency', 'endurance']
+      .map(
+        (key) => `<div class="stack-sm" style="gap:6px">
+        <div class="dim-labels"><span class="on">${KR_INDEX_EN[key]}</span><span class="off">${LEVEL_WORDS[k.levels[key]]}</span></div>
+        <div class="bar" role="img" aria-label="${KR_INDEX_EN[key]}: ${LEVEL_WORDS[k.levels[key]]}"><div style="width:${k.levels[key] * 20}%;background:#C2410C"></div></div>
+      </div>`
+      )
+      .join('')}
+    <div class="stack-sm" style="gap:4px"><span class="small">Answers per column</span>${sparkline(k.perColumn)}</div>
+    <span class="small">${k.speed} answers per column on average · ${k.errorRate}% errors</span>
+  </div>`;
+}
+
+let krCleanup = null;
+
+async function viewKraepelin() {
+  if (krCleanup) krCleanup();
+  let tabSwitches = 0;
+  const onVis = () => {
+    if (document.hidden) tabSwitches++;
+  };
+  let keyHandler = null;
+  let timer = null;
+  krCleanup = () => {
+    document.removeEventListener('visibilitychange', onVis);
+    if (keyHandler) document.removeEventListener('keydown', keyHandler);
+    if (timer) clearInterval(timer);
+    keyHandler = null;
+    timer = null;
+  };
+  window.addEventListener('hashchange', () => krCleanup && krCleanup(), { once: true });
+
+  const intro = () => {
+    app.className = 'app';
+    app.innerHTML = `<section class="screen">
+      ${topbar('Work attitude test', '#/home', 'close')}
+      <h1 class="h1" style="font-size:24px">How it works</h1>
+      <p class="lead" style="font-size:15px">Add the two numbers shown and enter only the <b>last digit</b> of the sum.</p>
+      <div class="card" style="flex-direction:row;align-items:center;gap:18px">
+        <div style="font-size:30px;font-weight:800;line-height:1.2;text-align:center">7<br>8</div>
+        <div class="small" style="font-size:14px">7 + 8 = 15, so you enter <b>5</b>.<br>5 + 4 = 9, so you enter <b>9</b>.</div>
+      </div>
+      <ul class="plain">
+        <li>The test has <b>40 columns of 15 seconds</b> each (10 minutes). When time is up, the next column starts automatically.</li>
+        <li>Work as fast and as accurately as you can, and keep going until the end.</li>
+        <li>Use the number keys on your keyboard or the keypad on screen.</li>
+        <li>Find a quiet place and don't switch apps or tabs during the test.</li>
+      </ul>
+      <div class="stack-sm push">
+        <button class="btn btn-outline" id="practice" type="button">Try a 15-second practice</button>
+        <button class="btn btn-primary" id="begin" type="button">Start the test</button>
+      </div>
+    </section>`;
+    document.getElementById('practice').addEventListener('click', () => run({ practice: true }));
+    document.getElementById('begin').addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        const cfg = await api('/api/kraepelin/start', { method: 'POST' });
+        run({ practice: false, cfg });
+      } catch (err) {
+        e.currentTarget.disabled = false;
+        alert(err.message);
+      }
+    });
+  };
+
+  const run = ({ practice, cfg }) => {
+    const seed = practice ? Math.floor(Math.random() * 4294967295) : cfg.seed;
+    const columns = practice ? 1 : cfg.columns;
+    const seconds = practice ? 15 : cfg.seconds;
+    const length = practice ? 70 : cfg.length;
+    const answers = [];
+    let col = 0;
+    let idx = 0;
+    let digits = columnDigits(seed, 0, length);
+    let colStart = performance.now();
+    let correctPractice = 0;
+    if (!practice) document.addEventListener('visibilitychange', onVis);
+
+    app.className = 'app';
+    app.innerHTML = `<section class="screen" style="gap:14px">
+      <div class="row between small" style="font-size:13px">
+        <span id="krCol">${practice ? 'Practice' : `Column 1 of ${columns}`}</span>
+        <span id="krCount">0 answered</span>
+      </div>
+      <div class="progress" aria-hidden="true"><div id="krTime" style="width:100%;transition:none"></div></div>
+      ${practice ? '' : `<div class="progress" aria-hidden="true" style="height:4px"><div id="krAll" style="width:0%;background:#9EA2F5"></div></div>`}
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin:10px 0">
+        <span id="krPrev" style="font-size:22px;font-weight:700;color:#AEB4C2;height:28px"></span>
+        <div style="display:flex;align-items:center;gap:18px">
+          <span style="font-size:30px;font-weight:700;color:var(--muted)">+</span>
+          <div style="display:flex;flex-direction:column;align-items:center;font-size:56px;font-weight:800;line-height:1.1">
+            <span id="krA"></span><span id="krB"></span>
+          </div>
+        </div>
+        <span id="krFb" class="small" style="height:20px" aria-live="polite"></span>
+      </div>
+      <div class="grid-3" id="krPad" style="gap:10px;margin-top:auto">
+        ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button type="button" class="btn btn-outline" data-d="${n}" style="height:60px;font-size:24px">${n}</button>`).join('')}
+        <span></span><button type="button" class="btn btn-outline" data-d="0" style="height:60px;font-size:24px">0</button><span></span>
+      </div>
+    </section>`;
+
+    const elA = document.getElementById('krA');
+    const elB = document.getElementById('krB');
+    const elPrev = document.getElementById('krPrev');
+    const elCount = document.getElementById('krCount');
+    const elTime = document.getElementById('krTime');
+    const elAll = document.getElementById('krAll');
+    const elFb = document.getElementById('krFb');
+    const elCol = document.getElementById('krCol');
+    answers[0] = [];
+
+    const show = () => {
+      elA.textContent = digits[idx];
+      elB.textContent = digits[idx + 1];
+      elPrev.textContent = idx > 0 ? digits[idx - 1] : '';
+      elCount.textContent = `${answers[col].length} answered`;
+    };
+
+    const finish = async () => {
+      krCleanup();
+      if (practice) {
+        app.innerHTML = `<section class="screen">
+          ${topbar('Practice done', '#/home', 'close')}
+          <div class="card"><b style="font-size:18px">${answers[0].length} answers, ${correctPractice} correct</b>
+          <span class="small">In the real test you won't see whether an answer is right. Just keep a steady pace.</span></div>
+          <div class="stack-sm push">
+            <button class="btn btn-outline" id="again" type="button">Practice again</button>
+            <button class="btn btn-primary" id="toIntro" type="button">I'm ready</button>
+          </div>
+        </section>`;
+        document.getElementById('again').addEventListener('click', () => run({ practice: true }));
+        document.getElementById('toIntro').addEventListener('click', intro);
+        return;
+      }
+      app.innerHTML = `<div class="loading"><div class="spinner"></div>Saving your results…</div>`;
+      try {
+        await api('/api/kraepelin/submit', { method: 'POST', body: { sessionId: cfg.sessionId, columns: answers, tabSwitches } });
+        go('#/results');
+      } catch (err) {
+        app.innerHTML = `<section class="screen"><div class="error" role="alert">${esc(err.message)}</div><a class="btn btn-outline" href="#/home">Back to home</a></section>`;
+      }
+    };
+
+    const nextColumn = () => {
+      col++;
+      if (col >= columns) return finish();
+      answers[col] = [];
+      idx = 0;
+      digits = columnDigits(seed, col, length);
+      colStart = performance.now();
+      elCol.textContent = `Column ${col + 1} of ${columns}`;
+      if (elAll) elAll.style.width = `${(col / columns) * 100}%`;
+      show();
+    };
+
+    const enter = (d) => {
+      if (idx >= length - 1) return;
+      if (practice) {
+        const ok = d === expected(digits, idx);
+        if (ok) correctPractice++;
+        elFb.textContent = ok ? 'Correct' : `Not quite: ${digits[idx]} + ${digits[idx + 1]} = ${digits[idx] + digits[idx + 1]}`;
+        elFb.style.color = ok ? 'var(--ok)' : 'var(--danger)';
+      }
+      answers[col].push(d);
+      idx++;
+      show();
+    };
+
+    document.getElementById('krPad').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-d]');
+      if (b) enter(Number(b.dataset.d));
+    });
+    keyHandler = (e) => {
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        enter(Number(e.key));
+      }
+    };
+    document.addEventListener('keydown', keyHandler);
+    timer = setInterval(() => {
+      const left = seconds - (performance.now() - colStart) / 1000;
+      elTime.style.width = `${Math.max(0, (left / seconds) * 100)}%`;
+      if (left <= 0) nextColumn();
+    }, 100);
+    show();
+  };
+
+  intro();
+}
+
 // ---------------- router ----------------
 
 async function render() {
   const hash = location.hash || '#/';
   const publicRoutes = ['#/login', '#/register'];
+  const joinMatch = hash.match(/^#\/join\/([A-Za-z0-9]{4,20})$/);
+  if (joinMatch) {
+    window.scrollTo(0, 0);
+    return viewJoin(joinMatch[1].toUpperCase()).catch((err) => {
+      app.innerHTML = `<section class="screen"><div class="error" role="alert">${esc(err.message)}</div><a class="btn btn-outline" href="#/">Go to app</a></section>`;
+    });
+  }
   if (!state.user && !publicRoutes.includes(hash)) {
     if (hash !== '#/') go('#/login');
     else go('#/register');
@@ -828,6 +1132,7 @@ async function render() {
     if (hash === '#/results') return await viewResults();
     if (hash === '#/consult') return await viewConsult();
     if (hash === '#/account') return viewAccount();
+    if (hash === '#/kraepelin') return await viewKraepelin();
     const t = hash.match(/^#\/test\/([a-z0-9]+)$/);
     if (t) return await viewTest(t[1]);
     go('#/home');

@@ -14,6 +14,7 @@ import {
   evaluate,
   iqCategory
 } from '/shared/talent.js';
+import { INDEX_NAMES } from '/shared/kraepelin.js';
 
 const root = document.getElementById('root');
 const S = { me: null, org: null, standards: [] };
@@ -100,7 +101,8 @@ const IC = {
   print: '<path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>',
   upload: '<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/>',
   download: '<path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/>',
-  compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>'
+  compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+  send: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>'
 };
 
 function loading() {
@@ -128,6 +130,7 @@ function shell(active, content) {
   const items = [
     ['dash', `#/o/${id}`, IC.dash, 'Dasbor'],
     ['peserta', `#/o/${id}/peserta`, IC.people, 'Peserta'],
+    ['undangan', `#/o/${id}/undangan`, IC.send, 'Undangan & Tes'],
     ['standar', `#/o/${id}/standar`, IC.ruler, 'Standar Jabatan'],
     ...(can('admin') ? [['pengaturan', `#/o/${id}/pengaturan`, IC.gear, 'Pengaturan']] : [])
   ];
@@ -658,8 +661,10 @@ function defaultConclusion(recKey, hasDev) {
   }.`;
 }
 
-async function viewForm(id) {
+async function viewForm(id, params) {
   const main = shell('peserta', loading());
+  const fromPid = params ? params.get('dari') : null;
+  let suggestions = [];
   let a = {
     standard_code: S.standards[0]?.code || '',
     scores: ASPECTS.map(() => 0),
@@ -670,6 +675,19 @@ async function viewForm(id) {
   if (id) {
     a = (await api(`/api/org/${S.org.id}/assessments/${id}`)).assessment;
     if (a.final_recommendation === a.recommendation) a.final_recommendation = '';
+  } else if (fromPid) {
+    const { participant: p } = await api(`/api/org/${S.org.id}/participants/${fromPid}`);
+    suggestions = p.suggestions || [];
+    a = {
+      ...a,
+      name: p.name,
+      nik: p.nik,
+      position: p.position,
+      division: p.division,
+      purpose: p.purpose || a.purpose,
+      standard_code: S.standards.some((s) => s.code === p.standard_code) ? p.standard_code : a.standard_code,
+      scores: ASPECTS.map((_, i) => (suggestions[i] ? suggestions[i].value : 0))
+    };
   }
   if (!S.standards.length) {
     main.innerHTML = `<div class="card"><h2>Belum ada standar jabatan</h2><p class="muted">Buat minimal satu standar jabatan sebelum menambah peserta.</p><a class="btn btn-primary" href="#/o/${S.org.id}/standar">Buka Standar Jabatan</a></div>`;
@@ -684,7 +702,9 @@ async function viewForm(id) {
 
   main.innerHTML = `
     <div class="page-head">
-      <div><h1>${id ? 'Ubah asesmen' : 'Tambah peserta'}</h1><p>${id ? esc(a.name) : 'Isi identitas, nilai 18 aspek, dan interpretasi psikolog.'}</p></div>
+      <div><h1>${id ? 'Ubah asesmen' : 'Tambah peserta'}</h1><p>${
+        id ? esc(a.name) : fromPid ? 'Nilai dari tes online sudah diisi sebagai saran. Periksa, lalu lengkapi aspek yang bertanda "perlu penilaian".' : 'Isi identitas, nilai 18 aspek, dan interpretasi psikolog.'
+      }</p></div>
       <div class="actions"><a class="btn btn-outline" href="${id ? `#/o/${S.org.id}/peserta/${id}` : `#/o/${S.org.id}/peserta`}">${icon(IC.back)}Batal</a></div>
     </div>
     <form id="af" class="form-layout" novalidate>
@@ -771,7 +791,11 @@ async function viewForm(id) {
         const v = scores[i];
         const d = v ? v - req[i] : null;
         html += `<tr>
-          <td><b>${esc(asp.name)}</b><div class="small muted">${esc(asp.high)}</div></td>
+          <td><b>${esc(asp.name)}</b>${
+            suggestions[i]
+              ? ` <span class="chip ${suggestions[i].strength === 'tes' ? 'rec-disarankan' : 'rec-catatan'}" title="${esc(suggestions[i].source)}">saran ${suggestions[i].strength}: ${LEVELS[suggestions[i].value - 1].code}</span>`
+              : fromPid ? ' <span class="chip chip-plain">perlu penilaian</span>' : ''
+          }<div class="small muted">${esc(asp.high)}</div></td>
           <td><div class="seg" role="radiogroup" aria-label="${esc(asp.name)}">${LEVELS.map(
             (l) =>
               `<button type="button" role="radio" data-i="${i}" data-v="${l.value}" aria-checked="${v === l.value}" class="${req[i] === l.value ? 'req' : ''}" title="${l.name}">${l.code}</button>`
@@ -844,6 +868,7 @@ async function viewForm(id) {
     }
     const body = { scores };
     for (const el of form.elements) if (el.name) body[el.name] = el.value;
+    if (fromPid) body.participant_id = fromPid;
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
@@ -924,6 +949,13 @@ async function viewReport(id) {
       <h3>Intelegensi umum</h3>
       <div class="stats"><span>IQ: <b>${a.iq ?? '-'}</b></span><span>Kategori: <b>${esc(iqCategory(a.iq) || '-')}</b></span><span>DISC: <b>${esc(a.disc || '-')}</b></span></div>
 
+      ${
+        a.kraepelin
+          ? `<h3>Sikap kerja (Kraepelin)</h3><div class="stats">${['speed', 'accuracy', 'consistency', 'endurance']
+              .map((k) => `<span>${INDEX_NAMES[k]}: <b>${LEVEL_ID[a.kraepelin.levels[k]]}</b></span>`)
+              .join('')}<span class="small">(${a.kraepelin.speed} jawaban/kolom, ${a.kraepelin.errorRate}% salah)</span></div>`
+          : ''
+      }
       <h3>Psikogram</h3>
       <table>
         <thead><tr><th style="text-align:left">Aspek psikologi</th><th>Skor rendah</th>${LEVELS.map((l) => `<th>${l.code}</th>`).join('')}<th>Skor tinggi</th></tr></thead>
@@ -981,6 +1013,203 @@ async function viewReport(id) {
       await api(`/api/org/${S.org.id}/assessments/${id}`, { method: 'DELETE' });
       go(`#/o/${S.org.id}/peserta`);
     });
+}
+
+// ---------------- invites & online test results ----------------
+
+const TEST_NAMES = { kraepelin: 'Kraepelin', bigfive: 'Big Five', type16: '16 Tipe' };
+const LEVEL_ID = ['', 'Sangat rendah', 'Rendah', 'Sedang', 'Tinggi', 'Sangat tinggi'];
+
+function inviteLink(code) {
+  return `${location.origin}/app/#/join/${code}`;
+}
+
+function statusChips(tests) {
+  return Object.entries(tests)
+    .map(([t, at]) => `<span class="chip ${at ? 'rec-disarankan' : 'chip-plain'}" title="${at ? 'Selesai ' + esc(at.slice(0, 10)) : 'Belum dikerjakan'}">${TEST_NAMES[t] || t} ${at ? '✓' : '·'}</span>`)
+    .join(' ');
+}
+
+async function viewInvites(params) {
+  const main = shell('undangan', loading());
+  const inviteFilter = params.get('gelombang') || '';
+  const [{ invites }, { participants }] = await Promise.all([
+    api(`/api/org/${S.org.id}/invites`),
+    api(`/api/org/${S.org.id}/participants${inviteFilter ? `?invite=${encodeURIComponent(inviteFilter)}` : ''}`)
+  ]);
+  const editor = can('assessor');
+
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Undangan &amp; tes online</h1><p>Kirim tautan agar karyawan mengerjakan psikotes online. Hasilnya muncul di sini sebagai saran nilai.</p></div>
+    </div>
+    ${
+      editor
+        ? `<form class="card" id="invf">
+      <h2>Buat tautan undangan</h2>
+      <div class="grid cols-form">
+        <div class="field"><label for="iname">Nama gelombang asesmen</label><input class="input" id="iname" required maxlength="120" placeholder="mis. Asesmen Promosi November 2026"></div>
+        <div class="field"><label for="istd">Standar jabatan</label><select class="input" id="istd">${standardOptions('', false)}</select><span class="hint">Dipakai sebagai standar awal saat membuat asesmen.</span></div>
+        <div class="field"><label for="ipur">Tujuan</label><input class="input" id="ipur" list="purposes2" value="Talent Assessment" maxlength="120"><datalist id="purposes2">${PURPOSES.map((p) => `<option value="${p}">`).join('')}</datalist></div>
+      </div>
+      <fieldset style="border:0;padding:0;margin:0" class="field"><legend style="font-size:13px;font-weight:600;margin-bottom:6px">Tes yang dikerjakan</legend>
+        <div class="actions">
+          <label class="chip chip-plain" style="padding:8px 12px"><input type="checkbox" name="t" value="kraepelin" checked> Kraepelin (±12 menit)</label>
+          <label class="chip chip-plain" style="padding:8px 12px"><input type="checkbox" name="t" value="bigfive" checked> Big Five (±10 menit)</label>
+          <label class="chip chip-plain" style="padding:8px 12px"><input type="checkbox" name="t" value="type16"> 16 Tipe (±8 menit)</label>
+        </div>
+      </fieldset>
+      <div id="ierr"></div>
+      <div class="actions"><button class="btn btn-primary" type="submit">Buat tautan</button></div>
+    </form>`
+        : ''
+    }
+    <div class="card">
+      <h2>Gelombang asesmen</h2>
+      ${
+        invites.length
+          ? `<div class="table-wrap"><table>
+        <thead><tr><th>Nama</th><th>Tautan</th><th>Tes</th><th class="num">Peserta</th><th>Status</th><th><span class="sr-only">Aksi</span></th></tr></thead>
+        <tbody>${invites
+          .map(
+            (i) => `<tr>
+            <td class="nm">${esc(i.name)}<div class="small muted">${esc(i.standard_code || '')} ${i.purpose ? '· ' + esc(i.purpose) : ''}</div></td>
+            <td><code style="font-size:12.5px">${esc(inviteLink(i.code))}</code><br><button class="link" type="button" data-copy="${esc(inviteLink(i.code))}">Salin tautan</button> <span class="small muted">· kode ${esc(i.code)}</span></td>
+            <td>${i.tests.map((t) => TEST_NAMES[t] || t).join(', ')}</td>
+            <td class="num"><a href="#/o/${S.org.id}/undangan?gelombang=${i.id}">${i.joined}</a></td>
+            <td>${i.active ? '<span class="chip rec-disarankan">Aktif</span>' : '<span class="chip chip-plain">Ditutup</span>'}</td>
+            <td>${editor ? `<button class="link" type="button" data-toggle="${i.id}" data-active="${i.active ? 0 : 1}">${i.active ? 'Tutup' : 'Buka lagi'}</button>` : ''}</td>
+          </tr>`
+          )
+          .join('')}</tbody></table></div>`
+          : '<p class="muted">Belum ada tautan undangan.</p>'
+      }
+    </div>
+    <div class="card">
+      <div class="page-head"><h2>Peserta tes online${inviteFilter ? ' · ' + esc(invites.find((i) => i.id === inviteFilter)?.name || '') : ''}</h2>${inviteFilter ? `<a href="#/o/${S.org.id}/undangan">Tampilkan semua</a>` : ''}</div>
+      ${
+        participants.length
+          ? `<div class="table-wrap"><table>
+        <thead><tr><th>Nama</th><th>Jabatan / Divisi</th><th>Gelombang</th><th>Tes</th><th><span class="sr-only">Aksi</span></th></tr></thead>
+        <tbody>${participants
+          .map(
+            (p) => `<tr>
+            <td><a class="nm" href="#/o/${S.org.id}/undangan/p/${p.id}">${esc(p.name)}</a><div class="small muted">${esc(p.nik || p.email)}</div></td>
+            <td>${esc(p.position || '-')}<div class="small muted">${esc(p.division || '')}</div></td>
+            <td>${esc(p.invite_name)}</td>
+            <td>${statusChips(p.tests)}</td>
+            <td style="white-space:nowrap">${
+              p.assessment_id
+                ? `<a href="#/o/${S.org.id}/peserta/${p.assessment_id}">Psikogram</a>`
+                : `<a href="#/o/${S.org.id}/undangan/p/${p.id}">Lihat hasil</a>`
+            }</td>
+          </tr>`
+          )
+          .join('')}</tbody></table></div>`
+          : '<p class="muted">Belum ada karyawan yang bergabung. Bagikan tautan undangan lewat email atau WhatsApp.</p>'
+      }
+    </div>`;
+
+  main.querySelectorAll('[data-copy]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(b.dataset.copy);
+        b.textContent = 'Tersalin';
+      } catch {
+        prompt('Salin tautan ini:', b.dataset.copy);
+      }
+    })
+  );
+  main.querySelectorAll('[data-toggle]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      await api(`/api/org/${S.org.id}/invites/${b.dataset.toggle}`, { method: 'PUT', body: { active: b.dataset.active === '1' } });
+      render();
+    })
+  );
+  const f = document.getElementById('invf');
+  if (f)
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const tests = [...f.querySelectorAll('input[name=t]:checked')].map((x) => x.value);
+      try {
+        await api(`/api/org/${S.org.id}/invites`, {
+          method: 'POST',
+          body: { name: f.iname.value, standard_code: f.istd.value, purpose: f.ipur.value, tests }
+        });
+        render();
+      } catch (err) {
+        document.getElementById('ierr').innerHTML = `<div class="error">${esc(err.message)}</div>`;
+      }
+    });
+}
+
+function krSpark(values) {
+  if (!values || values.length < 2) return '';
+  const w = 600;
+  const h = 90;
+  const max = Math.max(...values, 1);
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - (v / max) * (h - 8) - 4).toFixed(1)}`).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" role="img" aria-label="Jumlah jawaban per kolom"><polyline points="${pts}" fill="none" stroke="#3A3FD8" stroke-width="2" vector-effect="non-scaling-stroke"></polyline></svg>`;
+}
+
+async function viewParticipant(pid) {
+  const main = shell('undangan', loading());
+  const data = await api(`/api/org/${S.org.id}/participants/${pid}`);
+  const p = data.participant;
+  const k = p.results?.kraepelin;
+  const b5 = p.results?.bigfive;
+  const t16 = p.results?.type16;
+
+  const krBlock = k
+    ? `<div class="card"><h2>Kraepelin</h2>
+      <div class="grid cols-4">
+        <div class="kpi"><span>Kecepatan</span><b>${k.speed}</b><small>jawaban per kolom · ${LEVEL_ID[k.levels.speed]}</small></div>
+        <div class="kpi"><span>Ketelitian</span><b>${k.errorRate}%</b><small>kesalahan · ${LEVEL_ID[k.levels.accuracy]}</small></div>
+        <div class="kpi"><span>Keajegan</span><b>${k.range}</b><small>rentang naik-turun · ${LEVEL_ID[k.levels.consistency]}</small></div>
+        <div class="kpi"><span>Ketahanan</span><b>${Math.round(k.endurance * 100)}%</b><small>akhir ÷ awal · ${LEVEL_ID[k.levels.endurance]}</small></div>
+      </div>
+      <div><span class="small muted">Jawaban per kolom (${k.columns} kolom × ${k.seconds} detik)</span>${krSpark(k.perColumn)}</div>
+      <p class="small muted">${k.totalAnswered} jawaban, ${k.totalWrong} salah · percobaan ke-${k.attempt || 1}${k.tabSwitches ? ` · <b style="color:var(--danger)">berpindah tab/aplikasi ${k.tabSwitches} kali</b>` : ''}</p>
+    </div>`
+    : '';
+  const b5Block = b5
+    ? `<div class="card"><h2>Big Five</h2><div class="bars">${b5.traits
+        .map((t) => `<div class="bar-row"><span>${esc(t.name)}</span><span class="track"><div style="width:${t.pct}%;background:#0F7B6C"></div></span><span class="val">${t.pct}%</span></div>`)
+        .join('')}</div></div>`
+    : '';
+  const t16Block = t16 ? `<div class="card"><h2>16 Tipe</h2><p><b style="font-size:22px">${esc(t16.code)}</b> · ${esc(t16.title)}</p></div>` : '';
+
+  const sug = p.suggestions || [];
+  const sugCount = sug.filter(Boolean).length;
+  const sugBlock = data.restricted
+    ? ''
+    : `<div class="card"><h2>Saran nilai aspek</h2>
+      <p class="sub">${sugCount} dari 18 aspek punya saran dari tes online. <b>Tes</b> = diukur cukup langsung; <b>indikasi</b> = perlu dikonfirmasi lewat wawancara atau observasi. Aspek kognitif belum diukur tes online.</p>
+      <div class="table-wrap"><table><thead><tr><th>Aspek</th><th>Saran</th><th>Dasar</th></tr></thead><tbody>${GROUPS.map(
+        (g) =>
+          `<tr><td colspan="3" style="background:#F8F9FC;font-weight:800;font-size:12px;color:var(--muted);text-transform:uppercase">${g.name}</td></tr>${ASPECTS.map((a, i) => ({ a, i }))
+            .filter((x) => x.a.group === g.key)
+            .map(({ a, i }) => {
+              const s = sug[i];
+              return `<tr><td>${esc(a.name)}</td><td>${s ? `<b>${LEVELS[s.value - 1].code}</b> (${s.value})` : '<span class="muted">Penilaian psikolog</span>'}</td><td class="small">${s ? `${esc(s.source)} · <i>${s.strength}</i>` : ''}</td></tr>`;
+            })
+            .join('')}`
+      ).join('')}</tbody></table></div>
+    </div>`;
+
+  main.innerHTML = `
+    <div class="report-bar"><a class="btn btn-outline" href="#/o/${S.org.id}/undangan">${icon(IC.back)}Undangan &amp; tes</a>
+      <div class="actions">${
+        p.assessment_id
+          ? `<a class="btn btn-primary" href="#/o/${S.org.id}/peserta/${p.assessment_id}">Buka psikogram</a>`
+          : can('assessor') && !data.restricted
+            ? `<a class="btn btn-primary" href="#/o/${S.org.id}/peserta/baru?dari=${p.id}">Buat asesmen dari hasil ini</a>`
+            : ''
+      }</div></div>
+    <div class="page-head"><div><h1>${esc(p.name)}</h1><p>${esc([p.nik, p.position, p.division].filter(Boolean).join(' · ') || p.email)} · ${esc(p.invite_name)}</p></div></div>
+    <div class="card"><h2>Status tes</h2><div>${statusChips(p.tests)}</div><p class="small muted">Bergabung ${esc(p.joined_at.slice(0, 10))}, persetujuan berbagi hasil diberikan ${esc(p.consent_at.slice(0, 10))}. Hanya tes yang dikerjakan setelah bergabung yang dihitung.</p></div>
+    ${data.restricted ? '<div class="notice">Hasil tes psikologi hanya dapat dilihat oleh psikolog dan asesor. Peran Anda dapat melihat status tes dan psikogram yang sudah final.</div>' : ''}
+    ${krBlock}${b5Block}${t16Block}${sugBlock}`;
 }
 
 // ---------------- standards ----------------
@@ -1163,11 +1392,12 @@ async function render() {
     if (!section) return await viewDashboard(params);
     if (section === 'peserta') {
       if (!sub) return await viewList(params);
-      if (sub === 'baru') return can('assessor') ? await viewForm(null) : go(`#/o/${S.org.id}/peserta`);
+      if (sub === 'baru') return can('assessor') ? await viewForm(null, params) : go(`#/o/${S.org.id}/peserta`);
       if (action === 'edit') return can('assessor') ? await viewForm(sub) : go(`#/o/${S.org.id}/peserta/${sub}`);
       return await viewReport(sub);
     }
     if (section === 'standar') return await viewStandards(params);
+    if (section === 'undangan') return sub === 'p' && action ? await viewParticipant(action) : await viewInvites(params);
     if (section === 'pengaturan') return await viewSettings();
     go(`#/o/${S.org.id}`);
   } catch (err) {
