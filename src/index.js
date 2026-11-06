@@ -6,6 +6,7 @@ import { handleParticipant, myAssignments } from './participant.js';
 import { handleSchedule } from './schedule.js';
 import { handlePsych } from './psych.js';
 import { handleAdmin } from './admin.js';
+import { handlePool } from './pool.js';
 import { isPlatformAdmin } from './org.js';
 import { deleteUserData } from './userdata.js';
 import { validBirthDate, setBirthDate, getBirthDate, consentSummary, saveMyBirthDate } from './guardian.js';
@@ -443,6 +444,10 @@ async function handleApi(request, env) {
   }
   {
     const res = await handleSchedule(request, env, path, m, () => requireUser(request, env));
+    if (res) return res;
+  }
+  {
+    const res = await handlePool(request, env, path, m, () => requireUser(request, env));
     if (res) return res;
   }
   if (path.startsWith('/api/psych/')) {

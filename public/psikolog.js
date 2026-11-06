@@ -2,6 +2,7 @@
 
 import { esc, makeApi, IC, icon, loading, loginScreen, shell, parseHash, fmtDateTime, fmtDate, DAYS, MONTHS } from '/shared/ui.js';
 import { INDEX_NAMES } from '/shared/kraepelin.js';
+import { FACTORS as DISC_FACTORS } from '/shared/disc.js';
 
 const root = document.getElementById('root');
 const api = makeApi(() => loginScreen(root, 'Halaman psikolog', '/psikolog/'));
@@ -409,6 +410,14 @@ async function viewClient(id) {
         : ''
     }
     ${
+      r.disc
+        ? `<div class="card"><h2>DISC · ${esc(r.disc.code)}</h2><p>${esc(DISC_FACTORS[r.disc.primary].descId)}</p><div class="bars">${'DISC'
+            .split('')
+            .map((f) => `<div class="bar-row"><span>${f} · ${esc(DISC_FACTORS[f].id)}</span><span class="track"><div style="width:${((r.disc.change[f] + 24) / 48) * 100}%;background:#9F1D14"></div></span><span class="val">${r.disc.change[f] > 0 ? '+' : ''}${r.disc.change[f]}</span></div>`)
+            .join('')}</div><p class="small muted">Most ${'DISC'.split('').map((f) => f + r.disc.most[f]).join(' ')} · Least ${'DISC'.split('').map((f) => f + r.disc.least[f]).join(' ')} · dikerjakan ${fmtDate(r.disc.completedAt)}</p></div>`
+        : ''
+    }
+    ${
       r.kraepelin
         ? `<div class="card"><h2>Kraepelin</h2><div class="grid cols-4">${['speed', 'accuracy', 'consistency', 'endurance']
             .map((k) => `<div class="kpi"><span>${INDEX_NAMES[k]}</span><b style="font-size:20px">${LEVEL_ID[r.kraepelin.levels[k]]}</b></div>`)
@@ -424,7 +433,7 @@ async function viewClient(id) {
             .join('')}</ul></div>`
         : ''
     }
-    ${!r.type16 && !r.bigfive && !r.kraepelin ? '<div class="card"><p class="muted">Klien belum mengerjakan tes.</p></div>' : ''}`;
+    ${!r.type16 && !r.bigfive && !r.kraepelin && !r.disc ? '<div class="card"><p class="muted">Klien belum mengerjakan tes.</p></div>' : ''}`;
 }
 
 // ---------------- settings ----------------

@@ -21,7 +21,8 @@ async function stats(env) {
     inquiriesNew: await one("SELECT COUNT(*) AS n FROM inquiries WHERE status = 'new'"),
     upcoming: await one(`SELECT COUNT(*) AS n FROM appointments WHERE status IN ('requested','confirmed') AND start_at >= '${today}'`),
     requested: await one("SELECT COUNT(*) AS n FROM appointments WHERE status = 'requested'"),
-    testsDone: await one('SELECT COUNT(*) AS n FROM test_results')
+    testsDone: await one('SELECT COUNT(*) AS n FROM test_results'),
+    talentPool: await one('SELECT COUNT(*) AS n FROM talent_profiles WHERE visible = 1')
   });
 }
 

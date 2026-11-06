@@ -38,7 +38,7 @@ export function isPlatformAdmin(env, user) {
   return !!user && list.includes(String(user.email).toLowerCase());
 }
 
-async function orgAccess(env, user, orgId, minRole) {
+export async function orgAccess(env, user, orgId, minRole) {
   const org = await env.DB.prepare('SELECT id, name, type, settings, created_at FROM organizations WHERE id = ?').bind(orgId).first();
   if (!org) throw new HttpError(404, 'Organisasi tidak ditemukan');
   let role = null;

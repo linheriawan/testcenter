@@ -15,6 +15,7 @@ import {
   iqCategory
 } from '/shared/talent.js';
 import { INDEX_NAMES } from '/shared/kraepelin.js';
+import { FACTORS as DISC_FACTORS } from '/shared/disc.js';
 
 const root = document.getElementById('root');
 const S = { me: null, org: null, standards: [] };
@@ -102,7 +103,8 @@ const IC = {
   upload: '<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/>',
   download: '<path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/>',
   compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
-  send: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>'
+  send: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'
 };
 
 function loading() {
@@ -131,6 +133,7 @@ function shell(active, content) {
     ['dash', `#/o/${id}`, IC.dash, 'Dasbor'],
     ['peserta', `#/o/${id}/peserta`, IC.people, 'Peserta'],
     ['undangan', `#/o/${id}/undangan`, IC.send, 'Undangan & Tes'],
+    ...(['sekolah', 'kampus'].includes(S.org.type) ? [] : [['talent', `#/o/${id}/talent`, IC.search, 'Talent pool']]),
     ['standar', `#/o/${id}/standar`, IC.ruler, 'Standar Jabatan'],
     ...(can('admin') ? [['pengaturan', `#/o/${id}/pengaturan`, IC.gear, 'Pengaturan']] : [])
   ];
@@ -687,6 +690,8 @@ async function viewForm(id, params) {
       division: p.division,
       purpose: p.purpose || a.purpose,
       standard_code: S.standards.some((s) => s.code === p.standard_code) ? p.standard_code : a.standard_code,
+      disc: p.results?.disc ? p.results.disc.code : '',
+      work_style: p.results?.disc ? `${p.results.disc.code} – ${DISC_FACTORS[p.results.disc.primary].descId}` : '',
       scores: ASPECTS.map((_, i) => (suggestions[i] ? suggestions[i].value : 0))
     };
   }
@@ -1018,7 +1023,7 @@ async function viewReport(id) {
 
 // ---------------- invites & online test results ----------------
 
-const TEST_NAMES = { kraepelin: 'Kraepelin', bigfive: 'Big Five', type16: '16 Tipe' };
+const TEST_NAMES = { kraepelin: 'Kraepelin', bigfive: 'Big Five', disc: 'DISC', type16: '16 Tipe' };
 const LEVEL_ID = ['', 'Sangat rendah', 'Rendah', 'Sedang', 'Tinggi', 'Sangat tinggi'];
 
 function inviteLink(code) {
@@ -1058,6 +1063,7 @@ async function viewInvites(params) {
         <div class="actions">
           <label class="chip chip-plain" style="padding:8px 12px"><input type="checkbox" name="t" value="kraepelin" checked> Kraepelin (±12 menit)</label>
           <label class="chip chip-plain" style="padding:8px 12px"><input type="checkbox" name="t" value="bigfive" checked> Big Five (±10 menit)</label>
+          <label class="chip chip-plain" style="padding:8px 12px"><input type="checkbox" name="t" value="disc" checked> DISC (±8 menit)</label>
           <label class="chip chip-plain" style="padding:8px 12px"><input type="checkbox" name="t" value="type16"> 16 Tipe (±8 menit)</label>
         </div>
       </fieldset>
@@ -1131,7 +1137,7 @@ async function viewInvites(params) {
   const pexp = document.getElementById('pexp');
   if (pexp)
     pexp.addEventListener('click', () => {
-      const tests = ['kraepelin', 'bigfive', 'type16'];
+      const tests = ['kraepelin', 'bigfive', 'disc', 'type16'];
       const header = ['Nama', 'Email', 'NIK', 'Jabatan', 'Divisi', 'Gelombang', 'Bergabung', ...tests.map((t) => `${TEST_NAMES[t]} selesai`), 'Psikogram dibuat'];
       const rows = participants.map((p) => [
         p.name, p.email, p.nik, p.position, p.division, p.invite_name, p.joined_at.slice(0, 10),
@@ -1271,6 +1277,14 @@ async function viewParticipant(pid) {
         .map((t) => `<div class="bar-row"><span>${esc(t.name)}</span><span class="track"><div style="width:${t.pct}%;background:#0F7B6C"></div></span><span class="val">${t.pct}%</span></div>`)
         .join('')}</div></div>`
     : '';
+  const dc = p.results?.disc;
+  const dcBlock = dc
+    ? `<div class="card"><h2>DISC · ${esc(dc.code)}</h2><p>${esc(DISC_FACTORS[dc.primary].descId)}</p>
+      <div class="table-wrap"><table><thead><tr><th>Faktor</th><th class="num">Most</th><th class="num">Least</th><th class="num">Change</th></tr></thead><tbody>${'DISC'
+        .split('')
+        .map((f) => `<tr><td>${f} · ${esc(DISC_FACTORS[f].id)}</td><td class="num">${dc.most[f]}</td><td class="num">${dc.least[f]}</td><td class="num"><b>${dc.change[f] > 0 ? '+' : ''}${dc.change[f]}</b></td></tr>`)
+        .join('')}</tbody></table></div></div>`
+    : '';
   const t16Block = t16 ? `<div class="card"><h2>16 Tipe</h2><p><b style="font-size:22px">${esc(t16.code)}</b> · ${esc(t16.title)}</p></div>` : '';
 
   const sug = p.suggestions || [];
@@ -1327,7 +1341,7 @@ async function viewParticipant(pid) {
           : '<div class="notice">Hasil tes psikologi hanya dapat dilihat oleh psikolog dan asesor. Peran Anda dapat melihat status tes dan psikogram yang sudah final.</div>'
         : ''
     }
-    ${krBlock}${b5Block}${t16Block}${sugBlock}`;
+    ${krBlock}${b5Block}${dcBlock}${t16Block}${sugBlock}`;
 
   const gf = document.getElementById('gf');
   if (gf)
@@ -1377,6 +1391,139 @@ async function viewParticipant(pid) {
       await api(`/api/org/${S.org.id}/participants/${pid}`, { method: 'DELETE' });
       go(`#/o/${S.org.id}/undangan`);
     });
+}
+
+// ---------------- talent pool ----------------
+
+const KR_ID = { speed: 'Kecepatan', accuracy: 'Ketelitian', consistency: 'Keajegan', endurance: 'Ketahanan' };
+const LVL_ID = { 'Very low': 'sangat rendah', Low: 'rendah', Average: 'sedang', High: 'tinggi', 'Very high': 'sangat tinggi' };
+const BF_ID = { High: 'tinggi', Moderate: 'sedang', Low: 'rendah' };
+const TREQ = { pending: ['Menunggu jawaban', 'rec-catatan'], accepted: ['Diterima', 'rec-disarankan'], declined: ['Ditolak', 'rec-tidak'], withdrawn: ['Kandidat keluar', 'chip-plain'] };
+
+function candidateCardHtml(c) {
+  const st = c.request ? TREQ[c.request] : null;
+  return `<div class="card" style="gap:10px">
+    <div class="page-head" style="align-items:flex-start"><div><h2>Kandidat ${esc(c.alias)}</h2>${c.headline ? `<p>${esc(c.headline)}</p>` : ''}</div>${st ? `<span class="chip ${st[1]}">${st[0]}</span>` : ''}</div>
+    <dl class="kv" style="grid-template-columns:auto 1fr">
+      ${c.city ? `<dt>Kota</dt><dd style="text-align:left">${esc(c.city)}</dd>` : ''}
+      ${c.education ? `<dt>Pendidikan</dt><dd style="text-align:left">${esc(c.education)}</dd>` : ''}
+      ${c.desired_roles ? `<dt>Minat posisi</dt><dd style="text-align:left">${esc(c.desired_roles)}</dd>` : ''}
+      ${c.experience && c.experience.length ? `<dt>Pengalaman</dt><dd style="text-align:left">${c.experience.map((e) => `${esc(e.title)}${e.years ? ` (${e.years} th)` : ''}`).join(', ')}</dd>` : ''}
+    </dl>
+    ${c.skills && c.skills.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${c.skills.slice(0, 12).map((x) => `<span class="chip chip-plain">${esc(x)}</span>`).join('')}</div>` : ''}
+    ${
+      c.disc || c.type16 || c.bigfive || c.kraepelin
+        ? `<div class="small" style="display:flex;flex-direction:column;gap:4px;background:#F8F9FC;border-radius:10px;padding:10px 12px">
+        ${c.disc ? `<span><b>DISC</b> ${esc(c.disc)}</span>` : ''}${c.type16 ? `<span><b>16 Tipe</b> ${esc(c.type16)}</span>` : ''}
+        ${c.bigfive ? `<span><b>Big Five</b> ${c.bigfive.map((t) => `${esc(t.name)} ${BF_ID[t.level] || esc(t.level)}`).join(' · ')}</span>` : ''}
+        ${c.kraepelin ? `<span><b>Kraepelin</b> ${Object.entries(c.kraepelin).map(([k, v]) => `${KR_ID[k]} ${LVL_ID[v] || esc(v)}`).join(' · ')}</span>` : ''}
+      </div>`
+        : ''
+    }
+    ${
+      can('assessor') && (!c.request || ['declined', 'withdrawn'].includes(c.request))
+        ? `<details><summary class="link" style="cursor:pointer">Minta kontak</summary>
+        <form class="stack-sm" data-req="${esc(c.alias)}" style="margin-top:8px">
+          <label class="sr-only" for="m-${esc(c.alias)}">Pesan untuk kandidat</label>
+          <textarea class="input" id="m-${esc(c.alias)}" maxlength="600" placeholder="Posisi yang ditawarkan, lokasi, dan alasan Anda tertarik. Kandidat membaca pesan ini sebelum memutuskan."></textarea>
+          <div class="actions"><button class="btn btn-primary" type="submit">Kirim permintaan</button></div><div class="rmsg"></div>
+        </form></details>`
+        : ''
+    }
+  </div>`;
+}
+
+async function viewTalentPool(params) {
+  const main = shell('talent', loading());
+  const tab = params.get('tab') === 'permintaan' ? 'permintaan' : 'cari';
+  const head = `<div class="page-head"><div><h1>Talent pool</h1><p>Kandidat dewasa yang memilih untuk ditemukan. Profil tampil anonim; data kontak dibagikan hanya jika kandidat menerima permintaan Anda.</p></div>
+    <div class="actions"><a class="btn ${tab === 'cari' ? 'btn-primary' : 'btn-outline'}" href="#/o/${S.org.id}/talent">Cari kandidat</a><a class="btn ${tab === 'permintaan' ? 'btn-primary' : 'btn-outline'}" href="#/o/${S.org.id}/talent?tab=permintaan">Permintaan saya</a></div></div>`;
+
+  if (tab === 'permintaan') {
+    const [{ requests }, { invites }] = await Promise.all([api(`/api/org/${S.org.id}/talent/requests`), api(`/api/org/${S.org.id}/invites`)]);
+    const active = invites.filter((i) => i.active);
+    main.innerHTML = `${head}
+      ${
+        requests.length
+          ? requests
+              .map(
+                (r) => `<div class="card" style="gap:8px">
+          <div class="page-head"><h2>Kandidat ${esc(r.alias)}</h2><span class="chip ${TREQ[r.status][1]}">${TREQ[r.status][0]}</span></div>
+          <p class="small muted">Dikirim ${esc(r.created_at.slice(0, 10))}${r.responded_at ? ` · dijawab ${esc(r.responded_at.slice(0, 10))}` : ''}</p>
+          <p style="white-space:pre-line">${esc(r.message || '')}</p>
+          ${
+            r.contact
+              ? `<div class="notice"><b>${esc(r.contact.name)}</b> · <a href="mailto:${esc(r.contact.email)}">${esc(r.contact.email)}</a>${r.contact.phone ? ` · ${esc(r.contact.phone)}` : ''}</div>
+            ${
+              can('assessor') && active.length
+                ? `<form class="actions" data-inv="${esc(r.contact.email)}"><label class="sr-only" for="i-${r.id}">Gelombang asesmen</label><select class="input" id="i-${r.id}" style="max-width:320px">${active
+                    .map((i) => `<option value="${i.id}">${esc(i.name)}</option>`)
+                    .join('')}</select><button class="btn btn-outline" type="submit">Undang ke asesmen</button><span class="small imsg"></span></form>`
+                : ''
+            }`
+              : ''
+          }
+        </div>`
+              )
+              .join('')
+          : '<div class="card"><p class="muted">Belum ada permintaan kontak.</p></div>'
+      }
+      <p class="small muted">Gunakan data kontak hanya untuk keperluan rekrutmen yang disebutkan dalam pesan Anda.</p>`;
+    main.querySelectorAll('[data-inv]').forEach((f) =>
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const out = f.querySelector('.imsg');
+        try {
+          await api(`/api/org/${S.org.id}/invites/${f.querySelector('select').value}/emails`, { method: 'POST', body: { emails: f.dataset.inv } });
+          out.textContent = 'Undangan terkirim ke aplikasi kandidat.';
+        } catch (err) {
+          out.textContent = err.message;
+        }
+      })
+    );
+    return;
+  }
+
+  const q = new URLSearchParams();
+  for (const k of ['q', 'edu', 'city', 'test']) if (params.get(k)) q.set(k, params.get(k));
+  const { candidates } = await api(`/api/org/${S.org.id}/talent?${q}`);
+  main.innerHTML = `${head}
+    <form class="filters" id="tflt">
+      <div class="field grow"><label for="tq">Kata kunci</label><input class="input" id="tq" value="${esc(params.get('q') || '')}" placeholder="mis. data analyst SQL"></div>
+      <div class="field"><label for="tedu">Pendidikan</label><input class="input" id="tedu" value="${esc(params.get('edu') || '')}" placeholder="mis. S1"></div>
+      <div class="field"><label for="tcity">Kota</label><input class="input" id="tcity" value="${esc(params.get('city') || '')}"></div>
+      <div class="field"><label for="ttest">Hasil tes</label><select class="input" id="ttest"><option value="">Semua</option>${[
+        ['kraepelin', 'Ada Kraepelin'],
+        ['disc', 'Ada DISC'],
+        ['personality', 'Ada kepribadian']
+      ]
+        .map(([v, l]) => `<option value="${v}" ${params.get('test') === v ? 'selected' : ''}>${l}</option>`)
+        .join('')}</select></div>
+      <button class="btn btn-primary" type="submit" style="height:42px">Cari</button>
+    </form>
+    <p class="small muted">${candidates.length} kandidat${q.toString() ? ' sesuai pencarian' : ''}. Ringkasan hasil tes hanya tampil bila kandidat mengizinkannya.</p>
+    <div class="grid cols-2" style="align-items:start">${candidates.map(candidateCardHtml).join('') || '<div class="card"><p class="muted">Belum ada kandidat yang cocok.</p></div>'}</div>`;
+
+  document.getElementById('tflt').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const p = new URLSearchParams();
+    for (const [k, id] of [['q', 'tq'], ['edu', 'tedu'], ['city', 'tcity'], ['test', 'ttest']]) {
+      const v = document.getElementById(id).value.trim();
+      if (v) p.set(k, v);
+    }
+    go(`#/o/${S.org.id}/talent${p.toString() ? '?' + p : ''}`);
+  });
+  main.querySelectorAll('[data-req]').forEach((f) =>
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api(`/api/org/${S.org.id}/talent/requests`, { method: 'POST', body: { alias: f.dataset.req, message: f.querySelector('textarea').value } });
+        render();
+      } catch (err) {
+        f.querySelector('.rmsg').innerHTML = `<div class="error">${esc(err.message)}</div>`;
+      }
+    })
+  );
 }
 
 // ---------------- standards ----------------
@@ -1564,6 +1711,7 @@ async function render() {
       return await viewReport(sub);
     }
     if (section === 'standar') return await viewStandards(params);
+    if (section === 'talent') return await viewTalentPool(params);
     if (section === 'undangan') return sub === 'p' && action ? await viewParticipant(action) : await viewInvites(params);
     if (section === 'pengaturan') return await viewSettings();
     go(`#/o/${S.org.id}`);

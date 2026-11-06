@@ -13,6 +13,8 @@ export async function deleteUserData(env, userId) {
     env.DB.prepare('DELETE FROM org_participants WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM org_members WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM psychologists WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM talent_profiles WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM talent_requests WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId)
   ];
   if (u) stmts.push(env.DB.prepare('DELETE FROM org_invite_emails WHERE email = ?').bind(u.email));

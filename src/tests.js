@@ -179,6 +179,10 @@ function scoreBigFive(answers) {
   return { traits };
 }
 
+// ---------------- DISC-style work style (shared definition in public/shared/disc.js) ----------------
+
+import { GROUPS as DISC_GROUPS, validDisc, scoreDisc } from '../public/shared/disc.js';
+
 // ---------------- Catalog ----------------
 
 export const TESTS = {
@@ -193,6 +197,20 @@ export const TESTS = {
     scale: ['Very inaccurate', 'Moderately inaccurate', 'Neither', 'Moderately accurate', 'Very accurate'],
     questions: BIGFIVE_ITEMS.map(([, , text]) => ({ text })),
     score: scoreBigFive
+  },
+  disc: {
+    id: 'disc',
+    code: 'DI',
+    name: 'Work style (DISC)',
+    minutes: 8,
+    format: 'forced',
+    instruction: 'Go with your first instinct. Describe how you usually are at work or school.',
+    prompt: 'In each group, pick the word MOST like you and the word LEAST like you.',
+    scale: [],
+    // Factors are never sent to the browser, only the words.
+    questions: DISC_GROUPS.map((g) => ({ options: g.map(([text, gloss]) => ({ text, gloss })) })),
+    validate: validDisc,
+    score: scoreDisc
   },
   type16: {
     id: 'type16',
@@ -228,6 +246,7 @@ export function publicTest(t) {
 }
 
 export function validateAnswers(test, answers) {
+  if (test.validate) return test.validate(answers);
   if (!Array.isArray(answers) || answers.length !== test.questions.length) return false;
   return answers.every((a) => Number.isInteger(a) && a >= 1 && a <= 5);
 }

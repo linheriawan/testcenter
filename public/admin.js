@@ -7,7 +7,7 @@ const api = makeApi(() => loginScreen(root, 'Admin platform', '/admin/'));
 let ME = null;
 let STATS = null;
 
-const TEST_NAMES = { bigfive: 'Big Five', type16: '16 Tipe', kraepelin: 'Kraepelin' };
+const TEST_NAMES = { bigfive: 'Big Five', type16: '16 Tipe', kraepelin: 'Kraepelin', disc: 'DISC' };
 const SEG = { student: 'Pelajar', jobseeker: 'Pencari kerja' };
 const ROLE = { user: 'Pengguna', psychologist: 'Psikolog' };
 const ORG_TYPES = { sekolah: 'Sekolah', kampus: 'Perguruan tinggi', perusahaan: 'Perusahaan', biro: 'Biro psikologi', psikolog: 'Psikolog', lainnya: 'Lainnya' };
@@ -49,6 +49,7 @@ async function viewSummary() {
       <div class="kpi"><span>Sesi mendatang</span><b>${s.upcoming}</b><small>konsultasi &amp; asesmen</small></div>
       <div class="kpi"><span>Menunggu konfirmasi</span><b>${s.requested}</b><small>permintaan konsultasi</small></div>
       <div class="kpi"><span>Tes dikerjakan</span><b>${s.testsDone}</b><small>total semua tes</small></div>
+      <div class="kpi"><span>Talent pool</span><b>${s.talentPool}</b><small>kandidat yang membuka profil</small></div>
     </div>
     <div class="card"><h2>Menambah psikolog</h2><p class="muted">Psikolog membuat akun di aplikasi seperti pengguna biasa. Lalu buka <a href="#/pengguna">Pengguna</a>, cari emailnya, dan ubah perannya menjadi <b>Psikolog</b>. Setelah itu ia bisa membuka <b>${esc(location.origin)}/psikolog/</b> untuk mengatur jadwal dan menerima konsultasi.</p></div>`
   );

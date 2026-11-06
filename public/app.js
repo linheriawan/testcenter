@@ -1,6 +1,7 @@
 // Test Center — single-page app (vanilla JS, hash routing).
 
 import { columnDigits, expected } from '/shared/kraepelin.js';
+import { FACTORS as DISC_FACTORS } from '/shared/disc.js';
 
 const app = document.getElementById('app');
 const state = { user: null, hasProfile: false };
@@ -126,6 +127,12 @@ function nav(active) {
 
 function showError(el, message) {
   el.innerHTML = message ? `<div class="error" role="alert">${esc(message)}</div>` : '';
+}
+
+// A slow view that finishes after the user has already navigated elsewhere
+// must not overwrite the newer page.
+function stillHere(h) {
+  return location.hash === h;
 }
 
 function loading(text = 'Loading…') {
@@ -402,7 +409,9 @@ function renderProfileForm() {
 
 async function viewProfile() {
   loading();
+  const h = location.hash;
   const { profile } = await api('/api/profile');
+  if (!stillHere(h)) return;
   draft = {
     segment: profile?.segment || 'jobseeker',
     education_level: profile?.education_level || '',
@@ -420,6 +429,7 @@ async function viewProfile() {
 // ---------------- home ----------------
 
 const TEST_COLORS = {
+  disc: ['#FDE2E1', '#9F1D14'],
   kraepelin: ['#FFF3E6', '#9A3412'],
   bigfive: ['#DDF3EE', '#0B5E52'],
   type16: ['#E7E8FB', '#272BA8'],
@@ -429,9 +439,16 @@ const TEST_COLORS = {
 
 async function viewHome() {
   loading();
-  const [{ tests, assignments }, { invitations }, me] = await Promise.all([api('/api/tests'), api('/api/invitations'), api('/api/me')]);
+  const h = location.hash;
+  const [{ tests, assignments }, { invitations }, me, talent] = await Promise.all([
+    api('/api/tests'),
+    api('/api/invitations'),
+    api('/api/me'),
+    api('/api/talent/me').catch(() => null)
+  ]);
+  if (!stillHere(h)) return;
   applyMe(me);
-  const core = tests.filter((t) => t.status !== 'soon' && t.id !== 'kraepelin');
+  const core = tests.filter((t) => t.status !== 'soon' && t.id !== 'kraepelin' && t.id !== 'disc');
   const done = core.filter((t) => t.status === 'done').length;
   const first = (state.user?.name || '').split(' ')[0];
   app.className = 'app tinted';
@@ -455,6 +472,13 @@ async function viewHome() {
       state.minor && !state.guardianConsent
         ? `<div class="card" style="border-color:#9EA2F5"><b>You're under 18</b><span class="small">You can take the free tests and see your own results. To share results with your school or talk to a psychologist, your parent or guardian needs to sign a consent form at your school. Your school records it here once received.</span></div>`
         : ''
+    }
+    ${
+      talent && talent.eligible && talent.requests.some((r) => r.status === 'pending')
+        ? `<a class="card" href="#/talent" style="text-decoration:none;color:inherit;border-color:#9EA2F5;background:var(--accent-soft)"><span class="eyebrow" style="color:var(--accent)">Talent pool</span><b>${talent.requests.filter((r) => r.status === 'pending').length} employer${talent.requests.filter((r) => r.status === 'pending').length > 1 ? 's want' : ' wants'} to contact you</b><span class="small">Review and decide whether to share your contact.</span></a>`
+        : talent && talent.eligible && !talent.profile.visible && state.hasProfile
+          ? `<a class="card" href="#/talent" style="text-decoration:none;color:inherit"><b>Get discovered by employers</b><span class="small">Join the talent pool anonymously. You decide who gets your contact details.</span></a>`
+          : ''
     }
     ${(invitations || [])
       .map(
@@ -507,7 +531,9 @@ async function viewHome() {
               ? `Coming soon · ~${t.minutes} min`
               : t.id === 'kraepelin'
                 ? `Timed number test · ~${t.minutes} min`
-                : `${t.count} questions · ~${t.minutes} min`;
+                : t.id === 'disc'
+                  ? `${t.count} word groups · ~${t.minutes} min`
+                  : `${t.count} questions · ~${t.minutes} min`;
           const inner = `<span class="test-icon" style="background:${bg};color:${fg}">${esc(t.code)}</span>
             <span style="flex:1;display:flex;flex-direction:column;gap:3px;min-width:0">
               <span style="font-size:15px;font-weight:700">${esc(t.name)}</span>
@@ -547,13 +573,28 @@ async function viewHome() {
 
 async function viewTest(id) {
   loading();
+  const h = location.hash;
   const { test } = await api(`/api/tests/${id}`);
+  if (!stillHere(h)) return;
   const key = `tc_answers_${id}`;
   let answers = load(key);
   if (!Array.isArray(answers) || answers.length !== test.questions.length) answers = new Array(test.questions.length).fill(null);
   let index = answers.findIndex((a) => a === null);
   if (index === -1) index = test.questions.length - 1;
   let submitting = false;
+  let draft = {};
+
+  const advance = () => {
+    const nextOpen = answers.findIndex((a, i) => a === null && i > index);
+    const anyOpen = answers.findIndex((a) => a === null);
+    draw();
+    setTimeout(() => {
+      if (nextOpen !== -1) index = nextOpen;
+      else if (anyOpen !== -1) index = anyOpen;
+      draft = answers[index] ? { ...answers[index] } : {};
+      draw();
+    }, 220);
+  };
 
   const draw = () => {
     const q = test.questions[index];
@@ -563,7 +604,25 @@ async function viewTest(id) {
     const current = answers[index];
     let body = '';
 
-    if (test.format === 'pair') {
+    if (test.format === 'forced') {
+      const pick = answers[index] || draft;
+      body = `<div class="stack-sm" style="gap:6px;margin-top:8px">
+          <span class="eyebrow" style="color:var(--muted)">Group ${index + 1}</span>
+          <p style="font-size:15px;font-weight:600;line-height:1.45">${esc(test.prompt)}</p>
+        </div>
+        <div role="group" aria-label="Words in this group" style="display:flex;flex-direction:column;gap:8px">
+          <div class="row small" style="font-weight:700;padding:0 4px"><span style="flex:1"></span><span style="width:76px;text-align:center">Most</span><span style="width:76px;text-align:center">Least</span></div>
+          ${q.options
+            .map(
+              (o, i) => `<div class="row" style="border:1.5px solid ${pick.m === i ? 'var(--ok)' : pick.l === i ? 'var(--warm)' : 'var(--line-strong)'};border-radius:14px;padding:8px 8px 8px 16px;background:${pick.m === i ? 'var(--ok-soft)' : pick.l === i ? 'var(--warm-soft)' : '#FFFFFF'}">
+              <span style="flex:1"><b style="font-size:16px">${esc(o.text)}</b><br><span class="small">${esc(o.gloss)}</span></span>
+              <button type="button" class="select-btn" data-most="${i}" aria-pressed="${pick.m === i}" aria-label="${esc(o.text)}: most like me" style="width:76px">${pick.m === i ? '✓' : '+'}</button>
+              <button type="button" class="select-btn" data-least="${i}" aria-pressed="${pick.l === i}" aria-label="${esc(o.text)}: least like me" style="width:76px">${pick.l === i ? '✕' : '−'}</button>
+            </div>`
+            )
+            .join('')}
+        </div>`;
+    } else if (test.format === 'pair') {
       const sizes = [52, 42, 34, 42, 52];
       const colors = ['#3A3FD8', '#3A3FD8', '#8A91A3', '#C2410C', '#C2410C'];
       const labels = ['Strongly the left one', 'Somewhat the left one', 'Neutral', 'Somewhat the right one', 'Strongly the right one'];
@@ -595,7 +654,7 @@ async function viewTest(id) {
     app.innerHTML = `<section class="screen narrow-m">
       ${topbar(test.name, '#/home', 'close')}
       <div class="stack-sm">
-        <div class="row between small" style="font-size:13px"><span>Question ${index + 1} of ${total}</span><span>${answered} answered</span></div>
+        <div class="row between small" style="font-size:13px"><span>${test.format === 'forced' ? 'Group' : 'Question'} ${index + 1} of ${total}</span><span>${answered} answered</span></div>
         <div class="progress"><div style="width:${(answered / total) * 100}%"></div></div>
       </div>
       ${body}
@@ -611,6 +670,23 @@ async function viewTest(id) {
       </div>
     </section>`;
 
+    const choose = (kind, i) => {
+      draft = answers[index] ? { ...answers[index] } : { ...draft };
+      draft[kind] = i;
+      if (kind === 'm' && draft.l === i) delete draft.l;
+      if (kind === 'l' && draft.m === i) delete draft.m;
+      if (Number.isInteger(draft.m) && Number.isInteger(draft.l)) {
+        answers[index] = { m: draft.m, l: draft.l };
+        store(key, answers);
+        advance();
+      } else {
+        answers[index] = null;
+        store(key, answers);
+        draw();
+      }
+    };
+    app.querySelectorAll('[data-most]').forEach((b) => b.addEventListener('click', () => choose('m', Number(b.dataset.most))));
+    app.querySelectorAll('[data-least]').forEach((b) => b.addEventListener('click', () => choose('l', Number(b.dataset.least))));
     app.querySelectorAll('[data-answer]').forEach((b) =>
       b.addEventListener('click', () => {
         answers[index] = Number(b.dataset.answer);
@@ -630,9 +706,9 @@ async function viewTest(id) {
       })
     );
     const prev = document.getElementById('prev');
-    if (prev) prev.addEventListener('click', () => { index = Math.max(0, index - 1); draw(); });
+    if (prev) prev.addEventListener('click', () => { index = Math.max(0, index - 1); draft = answers[index] ? { ...answers[index] } : {}; draw(); });
     const next = document.getElementById('next');
-    if (next) next.addEventListener('click', () => { index = Math.min(total - 1, index + 1); draw(); });
+    if (next) next.addEventListener('click', () => { index = Math.min(total - 1, index + 1); draft = answers[index] ? { ...answers[index] } : {}; draw(); });
     const submit = document.getElementById('submit');
     if (submit)
       submit.addEventListener('click', async () => {
@@ -686,15 +762,17 @@ function matchesBlock(insights, busy, error) {
 
 async function viewResults() {
   loading();
+  const h = location.hash;
   const data = await api('/api/results');
+  if (!stillHere(h)) return;
   let insights = data.insights;
   let busy = false;
   let error = '';
-  const { type16, bigfive, kraepelin } = data.results;
+  const { type16, bigfive, kraepelin, disc } = data.results;
 
   const draw = () => {
     app.className = 'app tinted';
-    if (!type16 && !bigfive && !kraepelin) {
+    if (!type16 && !bigfive && !kraepelin && !disc) {
       app.innerHTML = `<section class="screen with-nav">
         <h1 class="h1" style="font-size:24px">Your results</h1>
         <div class="card"><b>No results yet</b><p class="small">Finish a test and your results will show up here.</p><a class="btn btn-primary" href="#/home">Go to tests</a></div>
@@ -739,6 +817,7 @@ async function viewResults() {
           : `<a class="card" href="#/test/bigfive" style="text-decoration:none;color:inherit"><b>Big Five personality</b><span class="small">Not taken yet. Take it for better matches.</span></a>`
       }
       ${kraepelinCard(data.results.kraepelin)}
+      ${discCard(data.results.disc)}
       ${matchesBlock(insights, busy, error)}
       <div class="card-dark">
         <div class="row" style="gap:8px">${icon('lock', 18, '#C9CCF7')}<span class="eyebrow">Full report</span></div>
@@ -794,7 +873,9 @@ function bookingCard(b, now) {
 
 async function viewConsult() {
   loading();
+  const h = location.hash;
   const [{ psychologists }, mine, me] = await Promise.all([api('/api/psychologists'), api('/api/bookings'), api('/api/me')]);
+  if (!stillHere(h)) return;
   applyMe(me);
   const sel = { psych: psychologists[0]?.id || null, session: 'review', date: null, time: null, note: '' };
   let days = [];
@@ -938,6 +1019,144 @@ async function viewConsult() {
   await loadSlots();
 }
 
+// ---------------- talent pool (get discovered by employers) ----------------
+
+const SHOW_FIELDS = [
+  ['education', 'Education level and field', 'e.g. "Bachelor (S1) · Informatics" (not your school name)'],
+  ['skills', 'Skills', 'from your profile'],
+  ['experience', 'Job titles and years', 'e.g. "Data Intern, 1 yr" (company names are never shown)'],
+  ['personality', 'Personality summary', '16-type code and Big Five levels'],
+  ['kraepelin', 'Work attitude (Kraepelin)', 'speed, accuracy, consistency, endurance levels'],
+  ['disc', 'Work style (DISC)', 'your DISC code']
+];
+const REQ_STATUS = { pending: 'Waiting for your answer', accepted: 'Accepted · contact shared', declined: 'Declined', withdrawn: 'Closed (you left the pool)' };
+
+function candidatePreview(c) {
+  if (!c) return '';
+  return `<div class="card" style="border-style:dashed">
+    <span class="eyebrow" style="color:var(--muted)">What employers see</span>
+    <b style="font-size:16px">Candidate ${esc(c.alias)}</b>
+    ${c.headline ? `<span>${esc(c.headline)}</span>` : ''}
+    <span class="small">${[c.city, c.education, c.experienceYears ? `${c.experienceYears} yr${c.experienceYears > 1 ? 's' : ''} experience` : ''].filter(Boolean).map(esc).join(' · ') || 'No details shown yet'}</span>
+    ${c.desired_roles ? `<span class="small">Looking for: <b>${esc(c.desired_roles)}</b></span>` : ''}
+    ${c.skills && c.skills.length ? `<div class="chips">${c.skills.slice(0, 10).map((x) => `<span class="chip" style="padding:6px 12px">${esc(x)}</span>`).join('')}</div>` : ''}
+    ${c.experience && c.experience.length ? `<span class="small">${c.experience.map((e) => `${esc(e.title)}${e.years ? ` (${e.years} yr${e.years > 1 ? 's' : ''})` : ''}`).join(' · ')}</span>` : ''}
+    ${[c.type16 ? `16-type ${esc(c.type16)}` : '', c.disc ? `DISC ${esc(c.disc)}` : '', c.bigfive ? 'Big Five summary' : '', c.kraepelin ? 'Kraepelin levels' : ''].filter(Boolean).length
+      ? `<span class="small">Test summaries: ${[c.type16 ? `16-type ${esc(c.type16)}` : '', c.disc ? `DISC ${esc(c.disc)}` : '', c.bigfive ? 'Big Five levels' : '', c.kraepelin ? 'Kraepelin levels' : ''].filter(Boolean).join(' · ')}</span>`
+      : ''}
+    <span class="small">Your name, email, phone and school or company names are never shown.</span>
+  </div>`;
+}
+
+async function viewTalent() {
+  loading();
+  const h = location.hash;
+  let data = await api('/api/talent/me');
+  if (!stillHere(h)) return;
+  let msg = '';
+  let err = '';
+
+  const draw = () => {
+    const p = data.profile;
+    app.className = 'app';
+    if (!data.eligible) {
+      app.innerHTML = `<section class="screen with-nav narrow-m">
+        ${topbar('Get discovered', '#/account')}
+        <div class="card"><b>The talent pool is for adults</b><span class="small">${
+          data.reason === 'minor'
+            ? 'Only users aged 18 and over can join the talent pool.'
+            : 'Please add your date of birth on the Home screen first. The talent pool is only for users aged 18 and over.'
+        }</span></div>
+      </section>${nav('#/account')}`;
+      return;
+    }
+    const pending = data.requests.filter((r) => r.status === 'pending');
+    app.innerHTML = `<section class="screen with-nav narrow-m">
+      ${topbar('Get discovered', '#/account')}
+      <div class="stack-sm">
+        <h1 class="h1" style="font-size:24px">Let employers find you</h1>
+        <p class="lead" style="font-size:14.5px">Employers search anonymous profiles. When one wants to reach you, you get a request here and decide. Your contact details are shared only if you accept. You can leave anytime.</p>
+      </div>
+      ${pending.length ? `<div class="card" style="border-color:#9EA2F5;background:var(--accent-soft)"><b>${pending.length} contact request${pending.length > 1 ? 's' : ''} waiting</b><span class="small">See below.</span></div>` : ''}
+      ${msg ? `<div class="notice" role="status">${esc(msg)}</div>` : ''}
+      <form id="tf" class="stack" novalidate>
+        <label class="card" style="flex-direction:row;align-items:center;gap:14px;cursor:pointer">
+          <input type="checkbox" id="tvis" ${p.visible ? 'checked' : ''} style="width:22px;height:22px;accent-color:var(--accent)">
+          <span style="display:flex;flex-direction:column;gap:2px"><b>Open to opportunities</b><span class="small">${p.visible ? `Your profile is visible as ${esc(p.alias)}.` : 'Turn on to appear in employer searches.'}</span></span>
+        </label>
+        <div class="field"><label for="thead">Headline</label><input class="input" id="thead" maxlength="140" value="${esc(p.headline || '')}" placeholder="e.g. Informatics graduate, interested in data analysis"></div>
+        <div class="field"><label for="troles">Roles you're looking for</label><input class="input" id="troles" maxlength="200" value="${esc(p.desired_roles || '')}" placeholder="e.g. Data Analyst, Business Analyst"></div>
+        <div class="field"><label for="tcity">City</label><input class="input" id="tcity" maxlength="80" value="${esc(p.city || '')}" placeholder="e.g. Jakarta"></div>
+        <fieldset class="card" style="margin:0">
+          <legend class="h2" style="font-size:15px;padding:0">What employers may see</legend>
+          ${SHOW_FIELDS.map(
+            ([k, label, hint]) => `<label class="check" style="font-size:14px;color:var(--ink)"><input type="checkbox" name="show" value="${k}" ${p.show[k] ? 'checked' : ''}><span><b>${label}</b><br><span class="small">${hint}</span></span></label>`
+          ).join('')}
+        </fieldset>
+        ${err ? `<div class="error" role="alert">${esc(err)}</div>` : ''}
+        <button class="btn btn-primary" type="submit">Save</button>
+      </form>
+      ${candidatePreview(data.preview)}
+      <div class="stack-sm">
+        <h2 class="h2" style="font-size:15px">Contact requests</h2>
+        ${
+          data.requests.length
+            ? data.requests
+                .map(
+                  (r) => `<div class="card" style="gap:8px">
+            <div class="row between"><b>${esc(r.org)}</b><span class="small" style="font-weight:700">${esc(REQ_STATUS[r.status] || r.status)}</span></div>
+            <p style="font-size:14px;line-height:1.5;white-space:pre-line">${esc(r.message || '')}</p>
+            <span class="small">${esc(r.created_at.slice(0, 10))}</span>
+            ${
+              r.status === 'pending'
+                ? `<div class="row"><button type="button" class="btn btn-primary btn-sm" data-accept="${r.id}">Accept and share my contact</button><button type="button" class="btn btn-outline btn-sm" data-dec="${r.id}">Decline</button></div>
+                   <span class="small">Accepting shares your name, email and phone number with ${esc(r.org)}.</span>`
+                : ''
+            }
+          </div>`
+                )
+                .join('')
+            : '<p class="small">No requests yet.</p>'
+        }
+      </div>
+    </section>${nav('#/account')}`;
+
+    document.getElementById('tf').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const show = {};
+      document.querySelectorAll('input[name=show]').forEach((x) => (show[x.value] = x.checked));
+      try {
+        data = await api('/api/talent/me', {
+          method: 'PUT',
+          body: {
+            visible: document.getElementById('tvis').checked,
+            headline: document.getElementById('thead').value,
+            desired_roles: document.getElementById('troles').value,
+            city: document.getElementById('tcity').value,
+            show
+          }
+        });
+        err = '';
+        msg = data.profile.visible ? 'Saved. Your profile is visible to employers.' : 'Saved. Your profile is hidden from employers.';
+      } catch (ex) {
+        err = ex.message;
+        msg = '';
+      }
+      draw();
+    });
+    const answer = async (id, accept) => {
+      if (accept && !confirm('Share your name, email and phone number with this organization?')) return;
+      await api(`/api/talent/requests/${id}/${accept ? 'accept' : 'decline'}`, { method: 'POST' });
+      data = await api('/api/talent/me');
+      msg = accept ? 'Accepted. The organization can now contact you.' : 'Declined.';
+      draw();
+    };
+    app.querySelectorAll('[data-accept]').forEach((b) => b.addEventListener('click', () => answer(b.dataset.accept, true)));
+    app.querySelectorAll('[data-dec]').forEach((b) => b.addEventListener('click', () => answer(b.dataset.dec, false)));
+  };
+  draw();
+}
+
 // ---------------- account ----------------
 
 function viewAccount() {
@@ -947,6 +1166,7 @@ function viewAccount() {
     <div class="card"><b style="font-size:16px">${esc(state.user.name)}</b><span class="small">${esc(state.user.email)}</span></div>
     <div class="card" style="gap:0;padding:6px 18px">
       <a href="#/profile" style="padding:14px 0;text-decoration:none;font-weight:700">Edit profile &amp; CV</a>
+      ${state.minor ? '' : '<a href="#/talent" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Get discovered by employers</a>'}
       ${state.isPsychologist ? '<a href="/psikolog/" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Psychologist workspace</a>' : ''}
       ${state.hasOrg || state.isAdmin ? '<a href="/org/" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Organization portal</a>' : ''}
       ${state.isAdmin ? '<a href="/admin/" style="padding:14px 0;text-decoration:none;font-weight:700;border-top:1px solid #EEF0F4">Platform admin</a>' : ''}
@@ -976,7 +1196,9 @@ function viewAccount() {
 
 async function viewJoin(code) {
   loading();
+  const h = location.hash;
   const { invite } = await api(`/api/join/${code}`);
+  if (!stillHere(h)) return;
   app.className = 'app';
   const head = `<a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">${icon('compass', 20, '#FFFFFF')}</span>Test Center</a>
     <div class="stack-sm">
@@ -1047,6 +1269,30 @@ function sparkline(values, w = 300, h = 60) {
   const max = Math.max(...values, 1);
   const pts = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - (v / max) * (h - 6) - 3).toFixed(1)}`).join(' ');
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" role="img" aria-label="Answers per column over time"><polyline points="${pts}" fill="none" stroke="#3A3FD8" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline></svg>`;
+}
+
+function discCard(d) {
+  if (!d) {
+    return `<a class="card" href="#/test/disc" style="text-decoration:none;color:inherit"><b>Work style (DISC)</b><span class="small">Not taken yet. Pick the words most and least like you, about 8 minutes.</span></a>`;
+  }
+  const max = 24;
+  return `<div class="card">
+    <span class="eyebrow" style="color:var(--muted)">Work style (DISC)</span>
+    <div class="row" style="gap:10px;align-items:baseline"><b style="font-size:30px;letter-spacing:1px">${esc(d.code)}</b><span class="small">${esc(DISC_FACTORS[d.primary].name)} first</span></div>
+    <p style="font-size:14px;line-height:1.5">${esc(DISC_FACTORS[d.primary].desc)}</p>
+    ${'DISC'
+      .split('')
+      .map((f) => {
+        const v = d.change[f];
+        const w = (Math.abs(v) / max) * 50;
+        return `<div class="stack-sm" style="gap:4px">
+        <div class="dim-labels"><span class="on">${DISC_FACTORS[f].name}</span><span class="off">${v > 0 ? '+' : ''}${v}</span></div>
+        <div class="bar" role="img" aria-label="${DISC_FACTORS[f].name} ${v}" style="position:relative;background:#EEF0F4"><div style="position:absolute;top:0;bottom:0;${v >= 0 ? 'left:50%' : `left:${50 - w}%`};width:${w}%;background:${v >= 0 ? '#9F1D14' : '#AEB4C2'}"></div><div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;background:#14213D"></div></div>
+      </div>`;
+      })
+      .join('')}
+    <span class="small">Bars show "most like me" minus "least like me". Right of the middle line means the style is strong for you.</span>
+  </div>`;
 }
 
 function kraepelinCard(k) {
@@ -1278,6 +1524,7 @@ async function render() {
     if (hash === '#/consult') return await viewConsult();
     if (hash === '#/account') return viewAccount();
     if (hash === '#/kraepelin') return await viewKraepelin();
+    if (hash === '#/talent') return await viewTalent();
     const t = hash.match(/^#\/test\/([a-z0-9]+)$/);
     if (t) return await viewTest(t[1]);
     go('#/home');

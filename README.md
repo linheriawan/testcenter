@@ -34,6 +34,19 @@ participant's page after receiving a signed paper form (printable at `/formulir-
 record keeps guardian name, relationship, form date, who recorded it and when. Admins can withdraw it.
 Consent is per organization and stored in `guardian_consents` (UU PDP Art. 25).
 
+**DISC-style work style test** (`public/shared/disc.js`): original 24-group most/least test based on
+Marston's public DISC model (not the DiSC® assessment or Thomas PPA). Scores Most, Least and Change per
+factor and a profile code such as "D-C". Available in the app, as an invite test, in participant
+results, as a prefilled DISC code and work style in the assessment form, and in the psychologist's client view.
+
+**Talent pool** (`src/pool.js`): adults (18+, date of birth required) opt in from the app and choose which
+fields employers see (education level and field, skills, job titles and years, personality summary,
+Kraepelin levels, DISC code). Name, email, phone, school and company names are never shown; candidates
+appear as `TC-XXXXXX`. Organizations (not schools) search in the portal and send a contact request with a
+message (min. 20 characters, 30 per day); the candidate accepts or declines in the app, and name, email and
+phone are revealed only on acceptance. Leaving the pool hides the profile and closes pending requests.
+Employers can invite accepted candidates to an assessment round. Billing is not built yet.
+
 **Invitations by email:** in the portal's *Undangan & Tes*, assessors can invite app users by email.
 Registered users see the invitation on their home screen; others see it once they register with that
 email. No email is sent by the app yet, so share the invite link by email or WhatsApp too.
@@ -177,6 +190,9 @@ npm run dev
 | GET / POST | `/api/org/:id/invites/:iid/emails` | invite app users by email |
 | POST / DELETE | `/api/org/:id/participants/:pid/consent` | record or withdraw a guardian's paper consent |
 | PUT | `/api/me/birthdate` | set date of birth once (existing accounts) |
+| GET / PUT | `/api/talent/me`; POST `/api/talent/requests/:id/accept|decline` | candidate's talent pool settings and requests |
+| GET | `/api/org/:id/talent?q=&edu=&city=&test=` | search anonymous candidates |
+| GET / POST | `/api/org/:id/talent/requests` | contact requests (contact revealed when accepted) |
 | GET | `/api/invitations`; POST `/api/invitations/:id/decline` | a user's pending invitations |
 | GET | `/api/psychologists`, `/api/slots?psychologist=&days=` | psychologists and free slots |
 | GET / POST | `/api/bookings`; POST `/api/bookings/:id/cancel` | a user's sessions |

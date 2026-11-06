@@ -3,6 +3,7 @@
 // strength: 'tes' = measured fairly directly; 'indikasi' = weaker, needs confirmation.
 
 import { ASPECTS } from './talent.js';
+import { changeLevel } from './disc.js';
 
 function fromPct(p) {
   // Big Five percentage (0–100) to 1–5.
@@ -18,7 +19,7 @@ function avg(...xs) {
   return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null;
 }
 
-export function suggestScores({ kraepelin, bigfive } = {}) {
+export function suggestScores({ kraepelin, bigfive, disc } = {}) {
   const k = kraepelin ? kraepelin.levels : null;
   const b = {};
   if (bigfive && Array.isArray(bigfive.traits)) for (const t of bigfive.traits) b[t.key] = t.pct;
@@ -54,6 +55,20 @@ export function suggestScores({ kraepelin, bigfive } = {}) {
   if (has('E') && has('N')) set('percayadiri', avg(fromPct(b.E), fromPct(100 - b.N)), 'Big Five: Extraversion + stabilitas emosi', 'indikasi');
   if (has('O') && has('N')) set('penyesuaian', avg(fromPct(b.O), fromPct(100 - b.N)), 'Big Five: Openness + stabilitas emosi', 'indikasi');
   if (has('E') && has('O')) set('inisiatif', avg(fromPct(b.E), fromPct(b.O)), 'Big Five: Extraversion + Openness', 'indikasi');
+
+  // DISC fills gaps only (weaker evidence than Big Five for these aspects).
+  if (disc && disc.change) {
+    const c = disc.change;
+    const fill = (key, value, source) => {
+      if (!out[key]) set(key, value, source, 'indikasi');
+    };
+    fill('kepemimpinan', changeLevel(c.D), 'DISC: Dominance');
+    fill('inisiatif', changeLevel(c.D), 'DISC: Dominance');
+    fill('interaksi', changeLevel(c.I), 'DISC: Influence');
+    fill('kerjasama', changeLevel(c.S), 'DISC: Steadiness');
+    fill('kepatuhan', changeLevel(c.C), 'DISC: Conscientiousness');
+    fill('sistematika', changeLevel(c.C), 'DISC: Conscientiousness');
+  }
 
   return ASPECTS.map((a) => out[a.key] || null);
 }

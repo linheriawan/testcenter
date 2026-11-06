@@ -8,6 +8,7 @@ import { getBirthDate, setBirthDate, validBirthDate, isMinor } from './guardian.
 export const INVITE_TESTS = {
   kraepelin: 'Work attitude (Kraepelin)',
   bigfive: 'Big Five personality',
+  disc: 'Work style (DISC)',
   type16: '16-type personality'
 };
 
