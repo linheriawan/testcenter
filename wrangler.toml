@@ -1,6 +1,8 @@
 name = "testcenter"
 main = "src/index.js"
 compatibility_date = "2025-10-01"
+# Keep variables added in the Cloudflare dashboard when deploying from GitHub.
+keep_vars = true
 
 routes = [
   { pattern = "tc.ictroo.com", custom_domain = true }
