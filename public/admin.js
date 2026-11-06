@@ -10,7 +10,7 @@ let STATS = null;
 const TEST_NAMES = { bigfive: 'Big Five', type16: '16 Tipe', kraepelin: 'Kraepelin' };
 const SEG = { student: 'Pelajar', jobseeker: 'Pencari kerja' };
 const ROLE = { user: 'Pengguna', psychologist: 'Psikolog' };
-const ORG_TYPES = { sekolah: 'Sekolah', kampus: 'Perguruan tinggi', perusahaan: 'Perusahaan', biro: 'Biro psikologi', lainnya: 'Lainnya' };
+const ORG_TYPES = { sekolah: 'Sekolah', kampus: 'Perguruan tinggi', perusahaan: 'Perusahaan', biro: 'Biro psikologi', psikolog: 'Psikolog', lainnya: 'Lainnya' };
 const INQ_STATUS = { new: 'Baru', contacted: 'Dihubungi', won: 'Jadi mitra', closed: 'Ditutup' };
 const STATUS_ID = { requested: 'Menunggu', confirmed: 'Terkonfirmasi', done: 'Selesai', cancelled: 'Dibatalkan', declined: 'Ditolak', no_show: 'Tidak hadir' };
 

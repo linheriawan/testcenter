@@ -385,7 +385,7 @@ async function generateInsights(request, env) {
 
 // ---------------- partnership inquiries (public front page) ----------------
 
-const ORG_TYPES = ['sekolah', 'kampus', 'perusahaan', 'biro', 'lainnya'];
+const ORG_TYPES = ['sekolah', 'kampus', 'perusahaan', 'biro', 'psikolog', 'lainnya'];
 
 async function ipHash(request, env) {
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
